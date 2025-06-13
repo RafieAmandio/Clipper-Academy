@@ -14,7 +14,6 @@ WORKDIR /app
 # Install system dependencies including FFmpeg
 RUN apt-get update && apt-get install -y \
     ffmpeg \
-    ffprobe \
     curl \
     git \
     build-essential \
