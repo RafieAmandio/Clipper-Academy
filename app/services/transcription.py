@@ -34,6 +34,7 @@ class TranscriptionService(BaseService):
             return
         
         try:
+            print(f"OpenAI API key: {self.settings.openai_api_key}")
             self.client = OpenAI(api_key=self.settings.openai_api_key)
             masked_key = f"{self.settings.openai_api_key[:8]}...{self.settings.openai_api_key[-4:]}"
             self.logger.info(f"OpenAI client initialized with key: {masked_key}")
