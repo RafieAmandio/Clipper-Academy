@@ -47,7 +47,7 @@ class AutoClipperService(BaseService):
             List of clip segment information
         """
         try:
-            self.content_analyzer_service._ensure_client()
+            # self.content_analyzer_service._ensure_client()  # Removed, not needed
             
             # Prepare transcript text with timestamps
             words = transcript_data.get('words', [])
