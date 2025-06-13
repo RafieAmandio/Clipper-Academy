@@ -3,6 +3,7 @@ fastapi[all]
 uvicorn[standard]
 python-multipart
 aiofiles
+httpx<0.28
 
 # AI and Machine Learning
 openai
