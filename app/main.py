@@ -103,6 +103,7 @@ async def clipper_exception_handler(request: Request, exc: ClipperException):
         status_code=500,
         content=ErrorResponse(
             error=str(exc),
+            message=str(exc),
             error_type=exc.__class__.__name__,
             detail="Service error occurred",
             timestamp=datetime.now()
@@ -118,6 +119,7 @@ async def general_exception_handler(request: Request, exc: Exception):
         status_code=500,
         content=ErrorResponse(
             error="Internal server error",
+            message="An unexpected error occurred",
             error_type="InternalServerError", 
             detail="An unexpected error occurred",
             timestamp=datetime.now()

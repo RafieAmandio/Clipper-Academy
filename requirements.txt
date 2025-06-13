@@ -15,7 +15,7 @@ requests
 # Environment and Configuration
 python-dotenv
 
-# Data Processing and Utils
+# Data Processing and Util
 Pillow==10.1.0
 
 # Video Processing
