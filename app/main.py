@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 import logging
 import time
 from datetime import datetime
+from fastapi.staticfiles import StaticFiles
 
 from app.config.settings import Settings
 from app.config.logging import setup_logging
@@ -67,6 +68,9 @@ app.include_router(
         500: {"description": "Internal server error"}
     }
 )
+
+# Mount /data as static files
+app.mount("/data", StaticFiles(directory="data"), name="data")
 
 
 @app.get("/")

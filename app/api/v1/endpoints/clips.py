@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
 from typing import Optional, Dict, Any
 import logging
@@ -21,6 +21,7 @@ async def process_clip_task(
     task_id: str,
     service: AutoClipperService,
     process_func: callable,
+    request: Request = None,
     **kwargs
 ) -> None:
     """Background task for processing clips"""
@@ -29,7 +30,7 @@ async def process_clip_task(
         await task_manager.update_task(task_id, TaskStatus.PROCESSING)
         
         # Process the clip
-        result = await process_func(**kwargs)
+        result = await process_func(**kwargs, request=request)
         
         # Update task with result
         await task_manager.update_task(
@@ -55,7 +56,8 @@ async def create_clips_from_upload(
     zapcap_language: str = Form("en"),
     aspect_ratio: str = Form("9:16"),
     max_clips: int = Form(5),
-    service: AutoClipperService = Depends(get_auto_clipper_service)
+    service: AutoClipperService = Depends(get_auto_clipper_service),
+    request: Request = None
 ) -> TaskResponse:
     """
     Create clips from uploaded video file (async)
@@ -105,7 +107,8 @@ async def create_clips_from_upload(
             video_input=temp_file_path,
             use_zapcap=use_zapcap,
             zapcap_template_id=zapcap_template_id,
-            aspect_ratio=aspect_ratio_enum.value
+            aspect_ratio=aspect_ratio_enum.value,
+            request=request
         )
         
         # Return task information
@@ -119,7 +122,8 @@ async def create_clips_from_upload(
 @router.post("/url", response_model=TaskResponse)
 async def create_clips_from_url(
     background_tasks: BackgroundTasks,
-    request: ClipFromURLRequest,
+    request: Request,
+    req: ClipFromURLRequest,
     service: AutoClipperService = Depends(get_auto_clipper_service)
 ) -> TaskResponse:
     """
@@ -131,16 +135,16 @@ async def create_clips_from_url(
     Returns a task ID that can be used to check the processing status.
     """
     try:
-        logger.info(f"Starting async processing for URL: {request.url}")
+        logger.info(f"Starting async processing for URL: {req.url}")
         
         # Create task
         task_id = await task_manager.create_task(
             "clip_url",
             metadata={
-                "url": str(request.url),
-                "use_zapcap": request.use_zapcap,
-                "aspect_ratio": request.aspect_ratio.value,
-                "max_clips": request.max_clips
+                "url": str(req.url),
+                "use_zapcap": req.use_zapcap,
+                "aspect_ratio": req.aspect_ratio.value,
+                "max_clips": req.max_clips
             }
         )
         
@@ -150,12 +154,13 @@ async def create_clips_from_url(
             task_id=task_id,
             service=service,
             process_func=service.create_clips_from_url,
-            url=str(request.url),
-            use_zapcap=request.use_zapcap,
-            zapcap_template_id=request.zapcap_template_id,
-            zapcap_language=request.zapcap_language,
-            aspect_ratio=request.aspect_ratio,
-            max_clips=request.max_clips
+            url=str(req.url),
+            use_zapcap=req.use_zapcap,
+            zapcap_template_id=req.zapcap_template_id,
+            zapcap_language=req.zapcap_language,
+            aspect_ratio=req.aspect_ratio,
+            max_clips=req.max_clips,
+            request=request
         )
         
         # Return task information
@@ -169,7 +174,8 @@ async def create_clips_from_url(
 @router.post("/file", response_model=TaskResponse)
 async def create_clips_from_file_path(
     background_tasks: BackgroundTasks,
-    request: ClipFromFilePathRequest,
+    request: Request,
+    req: ClipFromFilePathRequest,
     service: AutoClipperService = Depends(get_auto_clipper_service)
 ) -> TaskResponse:
     """
@@ -181,16 +187,16 @@ async def create_clips_from_file_path(
     Returns a task ID that can be used to check the processing status.
     """
     try:
-        logger.info(f"Starting async processing for file: {request.file_path}")
+        logger.info(f"Starting async processing for file: {req.file_path}")
         
         # Create task
         task_id = await task_manager.create_task(
             "clip_file",
             metadata={
-                "file_path": request.file_path,
-                "use_zapcap": request.use_zapcap,
-                "aspect_ratio": request.aspect_ratio.value,
-                "max_clips": request.max_clips
+                "file_path": req.file_path,
+                "use_zapcap": req.use_zapcap,
+                "aspect_ratio": req.aspect_ratio.value,
+                "max_clips": req.max_clips
             }
         )
         
@@ -200,12 +206,13 @@ async def create_clips_from_file_path(
             task_id=task_id,
             service=service,
             process_func=service.create_clips_from_file_path,
-            file_path=request.file_path,
-            use_zapcap=request.use_zapcap,
-            zapcap_template_id=request.zapcap_template_id,
-            zapcap_language=request.zapcap_language,
-            aspect_ratio=request.aspect_ratio,
-            max_clips=request.max_clips
+            file_path=req.file_path,
+            use_zapcap=req.use_zapcap,
+            zapcap_template_id=req.zapcap_template_id,
+            zapcap_language=req.zapcap_language,
+            aspect_ratio=req.aspect_ratio,
+            max_clips=req.max_clips,
+            request=request
         )
         
         # Return task information

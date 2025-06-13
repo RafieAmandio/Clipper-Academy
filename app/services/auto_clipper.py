@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Dict, List, Union, Optional
 from io import BytesIO
 
-from fastapi import UploadFile
+from fastapi import UploadFile, Request
 from openai import OpenAI
 
 from app.services.base import BaseService
@@ -16,6 +16,7 @@ from app.services.video_processing import VideoProcessingService
 from app.services.content_analyzer import ContentAnalyzerService
 from app.services.zapcap import ZapCapService
 from app.core.exceptions import VideoProcessingError, TranscriptionError, ContentAnalysisError
+from app.utils.url_utils import file_path_to_url
 
 
 class AutoClipperService(BaseService):
@@ -245,7 +246,8 @@ class AutoClipperService(BaseService):
     async def process_video(self, video_input: Union[str, UploadFile], 
                           use_zapcap: bool = False, 
                           zapcap_template_id: Optional[str] = None,
-                          aspect_ratio: str = "9:16") -> Dict:
+                          aspect_ratio: str = "9:16",
+                          request: Request = None) -> Dict:
         """Main processing function for auto clipping
         
         Args:
@@ -253,7 +255,8 @@ class AutoClipperService(BaseService):
             use_zapcap: Whether to use ZapCap for captions
             zapcap_template_id: Custom ZapCap template ID
             aspect_ratio: Target aspect ratio for clips
-            
+            request: FastAPI Request object for URL generation
+        
         Returns:
             Complete processing results
         """
@@ -312,6 +315,8 @@ class AutoClipperService(BaseService):
                     video_path, start_seconds, end_seconds, clip_path, aspect_ratio
                 )
                 
+                # Convert file path to URL if request is provided
+                clip_url = file_path_to_url(clip_path, request) if request else clip_path
                 clip_info = {
                     'clip_number': i + 1,
                     'title': segment['title'],
@@ -320,7 +325,7 @@ class AutoClipperService(BaseService):
                     'end_time': segment['end_time'],
                     'duration': clip_duration,
                     'engagement_score': segment.get('engagement_score', 0),
-                    'file_path': clip_path,
+                    'file_path': clip_url,
                     'file_name': clip_filename,
                     'aspect_ratio': aspect_ratio
                 }
@@ -343,15 +348,21 @@ class AutoClipperService(BaseService):
                         if 'error' in zapcap_result:
                             clip['zapcap_error'] = zapcap_result['error']
                         else:
+                            # Convert ZapCap result file path to URL
+                            if 'captioned_video_path' in zapcap_result and request:
+                                zapcap_result['captioned_video_url'] = file_path_to_url(zapcap_result['captioned_video_path'], request)
                             clip['zapcap_result'] = zapcap_result
             
             # Prepare response
+            # Convert original video path to URL if request is provided
+            video_url = file_path_to_url(video_path, request) if request else video_path
             result = {
                 'success': True,
                 'message': f'Successfully created {len(created_clips)} clips',
                 'total_clips': len(created_clips),
                 'clips': created_clips,
                 'original_video_info': video_info,
+                'original_video_url': video_url,
                 'transcript': transcript_data.get('text', ''),
                 'processing_summary': {
                     'video_duration': video_info['duration'],
