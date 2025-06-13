@@ -1,6 +1,7 @@
 from functools import lru_cache
 from typing import Generator
 from fastapi import Depends
+from openai import OpenAI
 
 from app.config.settings import Settings
 from app.services.transcription import TranscriptionService
@@ -16,9 +17,19 @@ def get_settings() -> Settings:
     return Settings()
 
 
-def get_transcription_service(settings: Settings = Depends(get_settings)) -> TranscriptionService:
+@lru_cache()
+def get_openai_client(settings: Settings = None) -> OpenAI:
+    if settings is None:
+        settings = get_settings()
+    return OpenAI(api_key=settings.openai_api_key)
+
+
+def get_transcription_service(
+    settings: Settings = Depends(get_settings),
+    openai_client: OpenAI = Depends(get_openai_client)
+) -> TranscriptionService:
     """Get transcription service instance"""
-    return TranscriptionService(settings)
+    return TranscriptionService(settings, openai_client)
 
 
 def get_video_processing_service(settings: Settings = Depends(get_settings)) -> VideoProcessingService:
@@ -31,11 +42,17 @@ def get_zapcap_service(settings: Settings = Depends(get_settings)) -> ZapCapServ
     return ZapCapService(settings)
 
 
-def get_content_analyzer_service(settings: Settings = Depends(get_settings)) -> ContentAnalyzerService:
+def get_content_analyzer_service(
+    settings: Settings = Depends(get_settings),
+    openai_client: OpenAI = Depends(get_openai_client)
+) -> ContentAnalyzerService:
     """Get content analyzer service instance"""
-    return ContentAnalyzerService(settings)
+    return ContentAnalyzerService(settings, openai_client)
 
 
-def get_auto_clipper_service(settings: Settings = Depends(get_settings)) -> AutoClipperService:
+def get_auto_clipper_service(
+    settings: Settings = Depends(get_settings),
+    openai_client: OpenAI = Depends(get_openai_client)
+) -> AutoClipperService:
     """Get auto clipper service instance"""
-    return AutoClipperService(settings) 
+    return AutoClipperService(settings, openai_client) 

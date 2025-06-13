@@ -124,34 +124,10 @@ class SmartFrameExtractor:
 class ContentAnalyzerService(BaseService):
     """Service for content analysis including social media downloads and AI analysis"""
     
-    def __init__(self, settings: Settings):
-        """Initialize content analyzer service
-        
-        Args:
-            settings: Application settings
-        """
+    def __init__(self, settings: Settings, openai_client: OpenAI):
         super().__init__(settings)
-        self.client: Optional[OpenAI] = None
+        self.client = openai_client
         self.frame_extractor = SmartFrameExtractor()
-        self._initialize_client()
-    
-    def _initialize_client(self) -> None:
-        """Initialize OpenAI client"""
-        if not self.settings.openai_api_key:
-            self.logger.warning("OpenAI API key not provided. AI analysis will not work.")
-            return
-        
-        try:
-            self.client = OpenAI(api_key=self.settings.openai_api_key)
-            self.logger.info("OpenAI client initialized for content analysis")
-        except Exception as e:
-            self.logger.error(f"Failed to initialize OpenAI client: {e}")
-            raise ConfigurationError(f"Failed to initialize OpenAI client: {e}")
-    
-    def _ensure_client(self) -> None:
-        """Ensure OpenAI client is available"""
-        if self.client is None:
-            raise ContentAnalysisError("OpenAI client not initialized. Check API key configuration.")
     
     def check_yt_dlp(self) -> bool:
         """Check if yt-dlp is available"""
@@ -419,8 +395,6 @@ class ContentAnalyzerService(BaseService):
         Returns:
             AI-generated summary
         """
-        self._ensure_client()
-        
         if language == 'id':
             prompt = (
                 "Berdasarkan transkrip audio dan gambar-gambar dari video berikut, extract:\n"

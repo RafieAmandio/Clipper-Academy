@@ -7,6 +7,7 @@ from typing import Dict, List, Union, Optional
 from io import BytesIO
 
 from fastapi import UploadFile
+from openai import OpenAI
 
 from app.services.base import BaseService
 from app.config.settings import Settings
@@ -20,18 +21,19 @@ from app.core.exceptions import VideoProcessingError, TranscriptionError, Conten
 class AutoClipperService(BaseService):
     """Main orchestrator service for automatic video clipping with AI analysis"""
     
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, openai_client: OpenAI):
         """Initialize auto clipper service
         
         Args:
             settings: Application settings
+            openai_client: Shared OpenAI client
         """
         super().__init__(settings)
         
-        # Initialize component services
-        self.transcription_service = TranscriptionService(settings)
+        # Initialize component services with shared OpenAI client
+        self.transcription_service = TranscriptionService(settings, openai_client)
         self.video_processing_service = VideoProcessingService(settings)
-        self.content_analyzer_service = ContentAnalyzerService(settings)
+        self.content_analyzer_service = ContentAnalyzerService(settings, openai_client)
         self.zapcap_service = ZapCapService(settings)
     
     def analyze_clip_segments(self, transcript_data: Dict, video_duration: float) -> List[Dict]:

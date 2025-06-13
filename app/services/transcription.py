@@ -17,30 +17,15 @@ from app.core.exceptions import TranscriptionError, ConfigurationError
 class TranscriptionService(BaseService):
     """Service for handling audio transcription with OpenAI Whisper"""
     
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, openai_client: OpenAI):
         """Initialize transcription service
         
         Args:
             settings: Application settings
+            openai_client: OpenAI client
         """
         super().__init__(settings)
-        self.client: Optional[OpenAI] = None
-        self._initialize_client()
-    
-    def _initialize_client(self) -> None:
-        """Initialize OpenAI client"""
-        if not self.settings.openai_api_key:
-            self.logger.warning("OpenAI API key not provided. Transcription will not work.")
-            return
-        
-        try:
-            print(f"OpenAI API key: {self.settings.openai_api_key}")
-            self.client = OpenAI(api_key=self.settings.openai_api_key)
-            masked_key = f"{self.settings.openai_api_key[:8]}...{self.settings.openai_api_key[-4:]}"
-            self.logger.info(f"OpenAI client initialized with key: {masked_key}")
-        except Exception as e:
-            self.logger.error(f"Failed to initialize OpenAI client: {e}")
-            raise ConfigurationError(f"Failed to initialize OpenAI client: {e}")
+        self.client = openai_client
     
     def _ensure_client(self) -> None:
         """Ensure OpenAI client is available"""
