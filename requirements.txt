@@ -1,0 +1,41 @@
+# FastAPI and Web Framework
+fastapi[all]
+uvicorn[standard]
+python-multipart
+aiofiles
+
+# AI and Machine Learning
+openai
+opencv-python
+numpy
+
+# HTTP and Network
+requests
+
+# Environment and Configuration
+python-dotenv
+
+# Data Processing and Utils
+Pillow==10.1.0
+
+# Video Processing
+ffmpeg-python==0.2.0
+
+# Social Media Content Downloading
+yt-dlp==2023.11.16
+
+# Type Annotations
+typing-extensions==4.8.0
+
+# Development and Testing (optional for production)
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-mock==3.12.0
+
+# Code Quality (optional for production)
+black==23.11.0
+isort==5.12.0
+flake8==6.1.0
+
+# Production Server (optional)
+gunicorn==21.2.0 

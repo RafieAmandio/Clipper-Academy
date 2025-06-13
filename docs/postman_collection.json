@@ -1,0 +1,236 @@
+{
+  "info": {
+    "name": "Clipper Academy API",
+    "description": "Postman collection for Clipper Academy FastAPI backend. Covers all major endpoints and async task workflow.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "clipper-academy-collection"
+  },
+  "item": [
+    {
+      "name": "Clips",
+      "item": [
+        {
+          "name": "Upload Video (Async)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "" },
+                { "key": "use_zapcap", "value": "false", "type": "text" },
+                { "key": "aspect_ratio", "value": "9:16", "type": "text" },
+                { "key": "max_clips", "value": "5", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/clips/upload",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "clips", "upload"]
+            }
+          }
+        },
+        {
+          "name": "Create Clips from URL (Async)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://www.tiktok.com/@user/video/1234567890\",\n  \"use_zapcap\": false,\n  \"aspect_ratio\": \"9:16\",\n  \"max_clips\": 5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/clips/url",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "clips", "url"]
+            }
+          }
+        },
+        {
+          "name": "Create Clips from File Path (Async)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"file_path\": \"/absolute/path/to/video.mp4\",\n  \"use_zapcap\": false,\n  \"aspect_ratio\": \"9:16\",\n  \"max_clips\": 5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/clips/file",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "clips", "file"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "Get Task Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/tasks/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tasks", "{{task_id}}"]
+            }
+          }
+        },
+        {
+          "name": "List All Tasks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/tasks/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tasks", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Analysis",
+      "item": [
+        {
+          "name": "Analyze Content from URL",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://www.tiktok.com/@user/video/1234567890\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/analysis/content",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "analysis", "content"]
+            }
+          }
+        },
+        {
+          "name": "Transcribe Audio from File Path",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"file_path\": \"/absolute/path/to/audio.mp3\",\n  \"return_timestamps\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/analysis/transcribe",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "analysis", "transcribe"]
+            }
+          }
+        },
+        {
+          "name": "Upload and Transcribe File",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "" },
+                { "key": "return_timestamps", "value": "true", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/analysis/upload-transcribe",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "analysis", "upload-transcribe"]
+            }
+          }
+        },
+        {
+          "name": "ZapCap Captioning",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "" },
+                { "key": "template_id", "value": "d2018215-2125-41c1-940e-f13b411fff5c", "type": "text" },
+                { "key": "language", "value": "en", "type": "text" },
+                { "key": "auto_approve", "value": "false", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/analysis/zapcap",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "analysis", "zapcap"]
+            }
+          }
+        },
+        {
+          "name": "Get Supported Formats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/analysis/formats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "analysis", "formats"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/health/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "health", "status"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Root & Ping",
+      "item": [
+        {
+          "name": "Root",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": ["{{base_url}}"],
+              "path": [""]
+            }
+          }
+        },
+        {
+          "name": "Ping",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ping",
+              "host": ["{{base_url}}"],
+              "path": ["ping"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000" },
+    { "key": "task_id", "value": "REPLACE_WITH_TASK_ID" }
+  ]
+} 

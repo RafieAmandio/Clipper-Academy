@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  auto-clipper-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ZAPCAP_API_KEY=${ZAPCAP_API_KEY}
+      - ZAPCAP_TEMPLATE_ID=${ZAPCAP_TEMPLATE_ID}
+      - INSTAGRAM_USERNAME=${INSTAGRAM_USERNAME}
+      - INSTAGRAM_PASSWORD=${INSTAGRAM_PASSWORD}
+      - DEBUG=false
+    volumes:
+      # Mount data directories for persistence
+      - ./data/uploads:/app/data/uploads
+      - ./data/clips:/app/data/clips
+      - ./data/temp:/app/data/temp
+      - ./data/results:/app/data/results
+      - ./data/logs:/app/data/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  # Optional: Redis for caching (future enhancement)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    profiles:
+      - cache
+
+  # Optional: Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - auto-clipper-api
+    restart: unless-stopped
+    profiles:
+      - production
+
+volumes:
+  redis_data: 

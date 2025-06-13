@@ -1,0 +1,296 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Clipper Academy - Cursor Rules
+
+## Project Structure
+
+Always follow this exact folder structure for all new files and changes:
+
+```
+clipper_academy/
+├── app/
+│   ├── config/           # Configuration management
+│   ├── core/             # Core functionality (dependencies, exceptions, middleware)
+│   ├── api/v1/           # API routes and endpoints
+│   ├── models/           # Pydantic models for requests/responses
+│   ├── services/         # Business logic services
+│   ├── utils/            # Utility functions
+│   └── storage/          # Storage interfaces and implementations
+├── tests/                # All test files
+├── data/                 # Runtime data directories
+└── docs/                 # Documentation
+```
+
+## Coding Standards
+
+### 1. File Organization Rules
+
+- **Services**: Place all business logic in `app/services/`. Each service should inherit from `BaseService`
+- **API Endpoints**: All endpoints go in `app/api/v1/endpoints/`. Group related endpoints in the same file
+- **Models**: Request/response models in `app/models/`. Split into `requests.py`, `responses.py`, and `enums.py`
+- **Utils**: Reusable utilities in `app/utils/`. Group by functionality (file_utils, video_utils, etc.)
+- **Configuration**: All config in `app/config/settings.py` using Pydantic BaseSettings
+
+### 2. Service Layer Patterns
+
+```python
+# ALL services must inherit from BaseService
+from app.services.base import BaseService
+from app.config.settings import Settings
+
+class MyService(BaseService):
+    def __init__(self, settings: Settings):
+        super().__init__(settings)
+        # Service-specific initialization
+    
+    async def my_method(self) -> ResponseType:
+        """Always use type hints and docstrings"""
+        pass
+```
+
+### 3. API Endpoint Patterns
+
+```python
+# ALL endpoints must follow this pattern
+from fastapi import APIRouter, Depends
+from app.core.dependencies import get_my_service
+from app.models.requests import MyRequest
+from app.models.responses import MyResponse
+
+router = APIRouter()
+
+@router.post("/endpoint", response_model=MyResponse)
+async def my_endpoint(
+    request: MyRequest,
+    service: MyService = Depends(get_my_service)
+) -> MyResponse:
+    """Always include docstrings for endpoints"""
+    return await service.process_request(request)
+```
+
+### 4. Error Handling Rules
+
+- **Custom Exceptions**: Always use custom exceptions from `app.core.exceptions`
+- **Service Errors**: Services should raise custom exceptions, NOT HTTPException
+- **API Layer**: Convert service exceptions to HTTPException only in API layer
+- **Logging**: Always log errors with context before raising
+
+```python
+# In services - GOOD
+from app.core.exceptions import VideoProcessingError
+
+class VideoService(BaseService):
+    async def process_video(self, path: str):
+        try:
+            # processing logic
+            pass
+        except Exception as e:
+            logger.error(f"Video processing failed for {path}: {e}")
+            raise VideoProcessingError(f"Failed to process video: {e}")
+
+# In API endpoints - GOOD
+@router.post("/process")
+async def process_endpoint(service: VideoService = Depends(get_video_service)):
+    try:
+        return await service.process_video(path)
+    except VideoProcessingError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+```
+
+### 5. Configuration Management
+
+- **Settings**: ALL configuration must go through `app.config.settings.Settings`
+- **Environment Variables**: Use Pydantic BaseSettings with proper typing
+- **No Hardcoded Values**: Never hardcode paths, URLs, or configuration values
+
+```python
+# ALWAYS use dependency injection for settings
+def get_my_service(settings: Settings = Depends(get_settings)) -> MyService:
+    return MyService(settings)
+```
+
+### 6. Model Patterns
+
+```python
+# Request models - app/models/requests.py
+from pydantic import BaseModel, Field, HttpUrl
+from typing import Optional
+from app.models.enums import AspectRatio
+
+class ProcessVideoRequest(BaseModel):
+    url: HttpUrl = Field(..., description="Video URL to process")
+    aspect_ratio: AspectRatio = AspectRatio.NINE_SIXTEEN
+    use_zapcap: bool = False
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "url": "https://example.com/video.mp4",
+                "aspect_ratio": "9:16",
+                "use_zapcap": false
+            }
+        }
+
+# Response models - app/models/responses.py
+class ProcessVideoResponse(BaseModel):
+    success: bool
+    message: str
+    clips: List[ClipInfo]
+    processing_time: float
+```
+
+### 7. Dependency Injection Rules
+
+- **ALL services** must be injected via dependencies
+- **NO direct instantiation** of services in endpoints
+- **Cache settings** using @lru_cache() in dependencies
+- **Use Depends()** for all service injections
+
+```python
+# app/core/dependencies.py
+from functools import lru_cache
+
+@lru_cache()
+def get_settings() -> Settings:
+    return Settings()
+
+def get_video_service(settings: Settings = Depends(get_settings)) -> VideoService:
+    return VideoService(settings)
+```
+
+## File Creation Rules
+
+### When creating new files:
+
+1. **Services**: `app/services/{service_name}.py`
+   - Must inherit from BaseService
+   - Must have type hints
+   - Must have comprehensive docstrings
+   - Must use dependency injection
+
+2. **API Endpoints**: `app/api/v1/endpoints/{domain}.py`
+   - Must use APIRouter
+   - Must have request/response models
+   - Must use dependency injection
+   - Must have proper error handling
+
+3. **Models**: 
+   - Requests: `app/models/requests.py`
+   - Responses: `app/models/responses.py`
+   - Enums: `app/models/enums.py`
+
+4. **Utils**: `app/utils/{category}_utils.py`
+   - Pure functions only
+   - No state or dependencies
+   - Comprehensive type hints
+
+5. **Tests**: Mirror the app structure in `tests/`
+   - Unit tests: `tests/unit/test_{module}/`
+   - Integration tests: `tests/integration/test_{feature}/`
+
+## Import Standards
+
+```python
+# Standard library imports first
+import os
+import asyncio
+from typing import List, Dict, Optional
+
+# Third-party imports second
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+# Local imports last
+from app.config.settings import Settings
+from app.services.base import BaseService
+from app.core.exceptions import VideoProcessingError
+```
+
+## Logging Standards
+
+```python
+import logging
+
+logger = logging.getLogger(__name__)
+
+class MyService(BaseService):
+    async def my_method(self):
+        logger.info("Starting operation")
+        try:
+            # operation
+            logger.info("Operation completed successfully")
+        except Exception as e:
+            logger.error(f"Operation failed: {e}")
+            raise CustomException(f"Operation failed: {e}")
+```
+
+## Testing Standards
+
+- **ALL services** must have unit tests
+- **ALL endpoints** must have integration tests
+- **Use fixtures** for common test data
+- **Mock external dependencies** (OpenAI, ZapCap, etc.)
+
+```python
+# tests/unit/test_services/test_video_service.py
+import pytest
+from unittest.mock import Mock
+from app.services.video_service import VideoService
+
+class TestVideoService:
+    @pytest.fixture
+    def mock_settings(self):
+        return Mock()
+    
+    @pytest.fixture
+    def service(self, mock_settings):
+        return VideoService(mock_settings)
+    
+    async def test_process_video_success(self, service):
+        # Test implementation
+        pass
+```
+
+## Never Do
+
+1. **Never** import from `code_reference/` - that's old code
+2. **Never** hardcode file paths or URLs
+3. **Never** use global variables for state
+4. **Never** put business logic in API endpoints
+5. **Never** raise HTTPException from services
+6. **Never** instantiate services directly in endpoints
+7. **Never** skip type hints
+8. **Never** skip docstrings for public methods
+9. **Never** commit without tests for new functionality
+
+## Always Do
+
+1. **Always** follow the folder structure exactly
+2. **Always** use dependency injection
+3. **Always** use proper error handling with custom exceptions
+4. **Always** include comprehensive type hints
+5. **Always** write docstrings for public methods
+6. **Always** use Pydantic models for data validation
+7. **Always** log important operations
+8. **Always** write tests for new functionality
+9. **Always** use the settings system for configuration
+
+## When Refactoring Existing Code
+
+1. Move to proper folder structure first
+2. Extract business logic to services
+3. Create proper models for requests/responses
+4. Add dependency injection
+5. Add proper error handling
+6. Add comprehensive tests
+
+## API Versioning
+
+- All new endpoints go in `app/api/v1/`
+- Use semantic versioning for API changes
+- Maintain backward compatibility within major versions
+
+Remember: This structure ensures maintainability, testability, and scalability. Every file and every line of code should follow these patterns. 

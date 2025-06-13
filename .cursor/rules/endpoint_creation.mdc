@@ -1,0 +1,314 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Endpoint Creation Rules
+
+## Overview
+These rules govern the creation of new API endpoints in the Clipper Academy project. All endpoints must follow these patterns for consistency, maintainability, and scalability.
+
+## File Structure Rules
+
+### 1. Endpoint File Location
+- **ALL new endpoints** MUST be placed in `app/api/v1/endpoints/`
+- Group related endpoints in the same file (e.g., all clip operations in `clips.py`)
+- Use descriptive filenames that represent the domain (e.g., `health.py`, `analysis.py`, `clips.py`)
+
+### 2. Router Setup
+```python
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from app.core.dependencies import get_service_name
+from app.models.requests import RequestModel
+from app.models.responses import ResponseModel
+
+router = APIRouter(tags=["domain_name"])
+```
+
+## Endpoint Definition Rules
+
+### 3. Endpoint Structure Template
+```python
+@router.post("/endpoint-name", response_model=ResponseModel)
+async def endpoint_function_name(
+    request: RequestModel,
+    service: ServiceClass = Depends(get_service_dependency)
+) -> ResponseModel:
+    """
+    Brief description of what this endpoint does
+    
+    Detailed description including:
+    - What it accepts
+    - What it returns
+    - Any special behavior
+    """
+    start_time = time.time()
+    
+    try:
+        logger.info(f"Starting {operation_name} for {identifier}")
+        
+        # Business logic here
+        result = await service.process_operation(request)
+        
+        processing_time = time.time() - start_time
+        
+        return ResponseModel(
+            success=True,
+            message="Operation completed successfully",
+            data=result,
+            processing_time=processing_time
+        )
+        
+    except ServiceSpecificError as e:
+        logger.error(f"{operation_name} failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{operation_name} failed: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error during {operation_name}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
+```
+
+### 4. Required Elements for Every Endpoint
+
+#### A. Imports
+- **MUST** import required FastAPI components
+- **MUST** import relevant dependencies from `app.core.dependencies`
+- **MUST** import request/response models from `app.models`
+- **MUST** import custom exceptions from `app.core.exceptions`
+
+#### B. Router Tags
+- **MUST** use descriptive tags that group related endpoints
+- Examples: `["clips"]`, `["health"]`, `["analysis"]`, `["transcription"]`
+
+#### C. Response Model
+- **MUST** specify `response_model` parameter
+- **MUST** use proper Pydantic response models from `app.models.responses`
+
+#### D. Function Signature
+- **MUST** be async functions
+- **MUST** use proper type hints
+- **MUST** use dependency injection for services
+- **MUST** accept request models for POST/PUT operations
+
+#### E. Documentation
+- **MUST** include comprehensive docstring
+- **SHOULD** include parameter descriptions
+- **SHOULD** include example use cases
+
+#### F. Error Handling
+- **MUST** use try/catch blocks
+- **MUST** catch service-specific exceptions first
+- **MUST** catch generic exceptions as fallback
+- **MUST** log errors with context
+- **MUST** raise appropriate HTTPException with status codes
+
+#### G. Logging
+- **MUST** log start of operations
+- **SHOULD** log processing time for long operations
+- **MUST** log errors with full context
+
+## Request/Response Model Rules
+
+### 5. Request Models
+- **MUST** create request models in `app/models/requests.py`
+- **MUST** use Pydantic BaseModel
+- **MUST** include field descriptions
+- **MUST** include validation where appropriate
+- **MUST** include `json_schema_extra` examples
+
+### 6. Response Models
+- **MUST** create response models in `app/models/responses.py`
+- **MUST** include standard fields: `success`, `message`
+- **SHOULD** include `processing_time` for operations
+- **MUST** include `json_schema_extra` examples
+
+## Dependency Injection Rules
+
+### 7. Service Dependencies
+- **MUST** use dependency injection for all services
+- **MUST** define dependencies in `app/core/dependencies.py`
+- **NEVER** instantiate services directly in endpoints
+- **MUST** use `Depends()` for all service injections
+
+### 8. Settings Dependencies
+- **MUST** inject settings through `get_settings()` dependency
+- **NEVER** access environment variables directly in endpoints
+
+## Validation Rules
+
+### 9. Input Validation
+- **MUST** validate file types for file uploads
+- **MUST** validate required parameters
+- **MUST** return 400 for validation errors
+- **MUST** use Pydantic validators where possible
+
+### 10. File Upload Handling
+```python
+@router.post("/upload-endpoint")
+async def upload_endpoint(
+    file: UploadFile = File(..., description="Description of file"),
+    other_param: str = Form(...),
+    service: ServiceClass = Depends(get_service)
+):
+    # Validate file type
+    if not file.filename or not file.filename.lower().endswith(('.mp4', '.mov')):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported file format"
+        )
+    
+    # Process upload...
+```
+
+## Status Code Rules
+
+### 11. HTTP Status Codes
+- **200**: Successful operations
+- **201**: Resource created
+- **400**: Bad request/validation errors
+- **404**: Resource not found
+- **422**: Unprocessable entity (Pydantic validation)
+- **500**: Internal server errors
+- **503**: Service unavailable
+
+## Testing Requirements
+
+### 12. Test Coverage
+- **MUST** create integration tests in `tests/integration/test_api/`
+- **MUST** test success scenarios
+- **MUST** test error scenarios
+- **MUST** test validation failures
+- **SHOULD** achieve >90% test coverage
+
+## Registration Rules
+
+### 13. Router Registration
+- **MUST** register new endpoint files in `app/api/v1/api.py`
+```python
+from app.api.v1.endpoints import new_endpoint
+app.include_router(new_endpoint.router, prefix="/new-domain")
+```
+
+## Documentation Rules
+
+### 14. OpenAPI Documentation
+- **MUST** include proper descriptions in docstrings
+- **MUST** include example requests/responses
+- **SHOULD** include parameter descriptions
+- **MUST** use proper response models for auto-documentation
+
+## Security Rules
+
+### 15. Input Sanitization
+- **MUST** validate all user inputs
+- **MUST** sanitize file paths
+- **MUST** validate URL formats
+- **NEVER** execute user-provided code
+
+### 16. File Handling
+- **MUST** clean up temporary files
+- **MUST** use secure temporary file names
+- **MUST** validate file sizes
+- **MUST** scan for malicious content where applicable
+
+## Performance Rules
+
+### 17. Async Operations
+- **MUST** use async/await for I/O operations
+- **MUST** use background tasks for long-running operations
+- **SHOULD** implement timeouts for external service calls
+
+### 18. Resource Management
+- **MUST** implement proper cleanup in finally blocks
+- **MUST** close file handles
+- **MUST** clean up temporary resources
+
+## Examples
+
+### 19. Complete Endpoint Example
+```python
+@router.post("/process-video", response_model=VideoProcessResponse)
+async def process_video_endpoint(
+    request: VideoProcessRequest,
+    video_service: VideoProcessingService = Depends(get_video_processing_service)
+) -> VideoProcessResponse:
+    """
+    Process video for clip generation
+    
+    Accepts video processing parameters and generates clips based on AI analysis.
+    Returns detailed information about generated clips and processing statistics.
+    """
+    start_time = time.time()
+    
+    try:
+        logger.info(f"Starting video processing for file: {request.file_path}")
+        
+        # Validate input
+        if not os.path.exists(request.file_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Video file not found: {request.file_path}"
+            )
+        
+        # Process video
+        result = await video_service.process_video(
+            file_path=request.file_path,
+            aspect_ratio=request.aspect_ratio,
+            max_clips=request.max_clips
+        )
+        
+        processing_time = time.time() - start_time
+        
+        return VideoProcessResponse(
+            success=True,
+            message=f"Successfully processed video: {len(result.clips)} clips created",
+            clips=result.clips,
+            processing_time=processing_time
+        )
+        
+    except VideoProcessingError as e:
+        logger.error(f"Video processing failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Video processing failed: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error during video processing: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
+```
+
+## Checklist for New Endpoints
+
+- [ ] File placed in correct directory (`app/api/v1/endpoints/`)
+- [ ] Router created with proper tags
+- [ ] Request model created in `app/models/requests.py`
+- [ ] Response model created in `app/models/responses.py`
+- [ ] Dependency injection used for services
+- [ ] Proper error handling implemented
+- [ ] Comprehensive logging added
+- [ ] Input validation included
+- [ ] Docstring with examples added
+- [ ] Integration tests created
+- [ ] Router registered in `app/api/v1/api.py`
+- [ ] OpenAPI documentation verified
+
+## Never Do
+
+1. **NEVER** put business logic in endpoints - use services
+2. **NEVER** instantiate services directly - use dependency injection
+3. **NEVER** access environment variables directly - use settings
+4. **NEVER** skip error handling
+5. **NEVER** skip input validation
+6. **NEVER** forget to clean up temporary resources
+7. **NEVER** use synchronous operations for I/O
+8. **NEVER** expose internal error details to users
+9. **NEVER** skip logging
+10. **NEVER** forget to write tests

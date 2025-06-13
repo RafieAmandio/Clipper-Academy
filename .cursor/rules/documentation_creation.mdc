@@ -1,0 +1,388 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Documentation Creation Rules (.mdc Files)
+
+## Overview
+These rules govern the creation and maintenance of documentation files in the `.cursor/rules` directory using the `.mdc` (Markdown Cursor) format. All documentation must follow these standards for consistency and usability.
+
+## When to Create Documentation
+
+### 1. Required Documentation Triggers
+Create `.mdc` documentation files when:
+- **New feature development**: Major new features require documentation
+- **Architecture changes**: Any changes to project structure or patterns
+- **API changes**: New endpoints, request/response models, or breaking changes
+- **Development workflow changes**: New development processes or standards
+- **Deployment procedures**: New deployment methods or environment setups
+- **Testing strategies**: New testing approaches or frameworks
+- **Security implementations**: Security measures, authentication, authorization
+- **Performance optimizations**: Caching, database optimization, scaling strategies
+- **Integration guides**: Third-party service integrations
+- **Troubleshooting procedures**: Common issues and solutions
+
+### 2. Documentation Categories
+Organize documentation into these categories:
+- **Architecture**: `architecture_*.mdc`
+- **API Guidelines**: `api_*.mdc`, `endpoint_*.mdc`
+- **Development Workflow**: `development_*.mdc`, `coding_*.mdc`
+- **Deployment**: `deployment_*.mdc`, `docker_*.mdc`
+- **Testing**: `testing_*.mdc`
+- **Security**: `security_*.mdc`
+- **Performance**: `performance_*.mdc`
+- **Integration**: `integration_*.mdc`
+- **Troubleshooting**: `troubleshooting_*.mdc`
+
+## File Naming Conventions
+
+### 3. Naming Rules
+- **MUST** use descriptive, lowercase names with underscores
+- **MUST** use `.mdc` extension
+- **MUST** include category prefix when appropriate
+- **SHOULD** include version or date for time-sensitive docs
+
+### 4. Naming Examples
+```
+.cursor/rules/
+├── endpoint_creation.mdc           # ✅ Good
+├── api_versioning_standards.mdc    # ✅ Good  
+├── deployment_docker_guide.mdc     # ✅ Good
+├── testing_integration_setup.mdc   # ✅ Good
+├── security_authentication.mdc     # ✅ Good
+├── troubleshooting_common_errors.mdc # ✅ Good
+└── performance_optimization_v2.mdc # ✅ Good (versioned)
+
+# ❌ Bad examples:
+├── NewEndpoint.mdc                 # ❌ CamelCase
+├── docs.mdc                        # ❌ Too generic
+├── temp.mdc                        # ❌ Meaningless
+└── endpoint-creation.md            # ❌ Wrong extension & hyphens
+```
+
+## Document Structure Standards
+
+### 5. Required Document Structure
+Every `.mdc` file **MUST** include these sections:
+
+```markdown
+# Document Title
+
+## Overview
+Brief description of what this document covers and its purpose.
+
+## Scope
+What is and isn't covered by this documentation.
+
+## [Main Content Sections]
+Detailed content organized logically.
+
+## Examples
+Practical examples and code snippets.
+
+## Checklist/Quick Reference
+Summary checklist or quick reference guide.
+
+## Related Documentation
+Links to related `.mdc` files and external resources.
+
+## Never Do / Always Do
+Clear guidelines on what to avoid and what to follow.
+```
+
+### 6. Section Guidelines
+
+#### A. Overview Section
+- **MUST** explain the document's purpose in 1-2 sentences
+- **SHOULD** include when to use this documentation
+- **MAY** include target audience
+
+#### B. Scope Section
+- **MUST** clearly define what is covered
+- **MUST** explicitly state what is NOT covered
+- **SHOULD** reference other documents for out-of-scope topics
+
+#### C. Main Content Sections
+- **MUST** use hierarchical heading structure (H1 → H2 → H3)
+- **MUST** be organized logically (general → specific)
+- **SHOULD** include code examples where applicable
+- **MUST** use consistent formatting
+
+#### D. Examples Section
+- **MUST** include practical, working examples
+- **MUST** use proper syntax highlighting
+- **SHOULD** include both good and bad examples
+- **MUST** be tested and verified
+
+#### E. Checklist Section
+- **MUST** provide actionable checklist items
+- **SHOULD** be in logical order
+- **MUST** use checkbox format `- [ ]`
+
+#### F. Related Documentation
+- **MUST** link to related `.mdc` files
+- **SHOULD** include external documentation links
+- **MUST** use relative paths for internal links
+
+#### G. Never Do / Always Do
+- **MUST** clearly state prohibited practices
+- **MUST** clearly state required practices
+- **SHOULD** explain why certain practices are required/prohibited
+
+## Writing Style Guidelines
+
+### 7. Tone and Voice
+- Use **clear, direct language**
+- Write in **imperative mood** for instructions
+- Use **active voice** whenever possible
+- Be **concise but complete**
+- Assume reader has basic development knowledge
+
+### 8. Formatting Standards
+
+#### A. Emphasis
+- **MUST**: Use for required actions
+- **SHOULD**: Use for recommended actions  
+- **MAY**: Use for optional actions
+- **NEVER**: Use for prohibited actions
+- Use `**bold**` for emphasis
+- Use `*italics*` for definitions or foreign terms
+
+#### B. Code Formatting
+```markdown
+# Inline code
+Use `backticks` for inline code, variables, filenames, and commands.
+
+# Code blocks
+Use triple backticks with language specification:
+```python
+def example_function():
+    return "Hello, World!"
+```
+
+# File paths
+Use `code formatting` for file paths: `app/api/v1/endpoints/clips.py`
+```
+
+#### C. Lists and Structure
+- Use numbered lists for sequential steps
+- Use bulleted lists for non-sequential items
+- Use nested lists for hierarchical information
+- Include blank lines between list items for readability
+
+### 9. Technical Content Rules
+
+#### A. Code Examples
+- **MUST** be syntactically correct
+- **MUST** include necessary imports
+- **MUST** be tested and working
+- **SHOULD** include comments explaining complex logic
+- **MUST** follow project coding standards
+
+#### B. File References
+- **MUST** use correct file paths relative to project root
+- **MUST** update paths if files are moved
+- **SHOULD** include line numbers for specific references
+
+#### C. Command Examples
+- **MUST** include full commands with options
+- **SHOULD** explain what each command does
+- **MUST** specify which directory to run commands from
+
+## Cross-Reference Guidelines
+
+### 10. Internal References
+```markdown
+# Reference other .mdc files
+See [Endpoint Creation Rules](mdc:endpoint_creation.mdc) for details.
+
+# Reference specific sections
+Refer to the [Validation Rules](mdc:#validation-rules) section above.
+
+# Reference external files
+Check the configuration in `app/config/settings.py`.
+```
+
+### 11. External References
+- **MUST** include full URLs for external documentation
+- **SHOULD** use descriptive link text
+- **MUST** verify links are active and correct
+- **SHOULD** include version numbers for external dependencies
+
+## Maintenance Guidelines
+
+### 12. Update Triggers
+Update documentation when:
+- Code patterns change
+- New requirements are added
+- Dependencies are updated
+- Deployment procedures change
+- Best practices evolve
+- Issues are discovered in existing docs
+
+### 13. Version Control
+- **MUST** commit documentation changes with descriptive messages
+- **SHOULD** include documentation updates in feature PRs
+- **MUST** review documentation during code reviews
+- **SHOULD** tag major documentation versions
+
+### 14. Deprecation Process
+When deprecating documentation:
+1. Add deprecation notice at the top
+2. Include replacement documentation link
+3. Set removal date
+4. Update all cross-references
+5. Remove after deprecation period
+
+## Quality Assurance
+
+### 15. Review Checklist
+Before finalizing any `.mdc` document:
+- [ ] Document follows required structure
+- [ ] All code examples are tested and working
+- [ ] Links are valid and accessible  
+- [ ] Grammar and spelling are correct
+- [ ] Information is current and accurate
+- [ ] Cross-references are updated
+- [ ] Examples include both good and bad practices
+- [ ] Checklist is actionable and complete
+
+### 16. Testing Documentation
+- **MUST** test all code examples
+- **MUST** verify all file paths exist
+- **MUST** check all external links
+- **SHOULD** have someone else review for clarity
+- **MUST** validate against current codebase
+
+## Documentation Templates
+
+### 17. Feature Documentation Template
+```markdown
+# Feature Name
+
+## Overview
+Brief description of the feature and its purpose.
+
+## Scope
+What this feature covers and what it doesn't.
+
+## Implementation Guide
+Step-by-step implementation instructions.
+
+## Configuration
+Required configuration settings and environment variables.
+
+## API Reference
+Endpoint documentation with request/response examples.
+
+## Testing
+How to test the feature implementation.
+
+## Examples
+Working code examples and use cases.
+
+## Troubleshooting
+Common issues and their solutions.
+
+## Checklist
+- [ ] Implementation steps completed
+- [ ] Configuration verified
+- [ ] Tests passing
+- [ ] Documentation updated
+
+## Related Documentation
+Links to related guides and references.
+
+## Never Do
+Prohibited practices and common mistakes to avoid.
+```
+
+### 18. Process Documentation Template
+```markdown
+# Process Name
+
+## Overview
+Description of the process and when to use it.
+
+## Prerequisites
+What needs to be in place before starting this process.
+
+## Step-by-Step Guide
+Detailed steps with commands and examples.
+
+## Verification
+How to verify the process completed successfully.
+
+## Rollback Procedure
+How to undo changes if something goes wrong.
+
+## Automation
+Scripts or tools that can automate this process.
+
+## Examples
+Real-world scenarios and examples.
+
+## Troubleshooting
+Common issues and solutions.
+
+## Checklist
+- [ ] Prerequisites met
+- [ ] Process steps completed
+- [ ] Verification successful
+- [ ] Documentation updated
+
+## Related Documentation
+Links to related processes and documentation.
+
+## Never Do
+Critical mistakes that could cause problems.
+```
+
+## Integration with Development Workflow
+
+### 19. Documentation in Development Process
+- **MUST** create documentation for new features
+- **MUST** update documentation during refactoring
+- **SHOULD** include documentation tasks in sprint planning
+- **MUST** review documentation during code reviews
+- **SHOULD** assign documentation ownership
+
+### 20. Documentation Automation
+Consider automating:
+- Link checking
+- Code example testing  
+- Documentation generation from code comments
+- Cross-reference validation
+- Spell checking
+
+## Examples of Good Documentation
+
+### 21. Comprehensive Example
+See the existing `endpoint_creation.mdc` file as an example of:
+- Proper structure and organization
+- Clear writing style
+- Comprehensive coverage
+- Practical examples
+- Actionable checklists
+
+### 22. Documentation Metrics
+Track documentation quality through:
+- Completeness of required sections
+- Accuracy of code examples
+- Frequency of updates
+- User feedback and issues
+- Cross-reference integrity
+
+## Never Do
+
+1. **NEVER** create documentation without a clear purpose
+2. **NEVER** copy-paste documentation without customization
+3. **NEVER** skip testing code examples
+4. **NEVER** use ambiguous or vague language
+5. **NEVER** forget to update cross-references
+6. **NEVER** include sensitive information (API keys, passwords)
+7. **NEVER** create duplicate documentation
+8. **NEVER** ignore documentation during code reviews
+9. **NEVER** let documentation become outdated
+10. **NEVER** assume readers have context you haven't provided
