@@ -174,21 +174,20 @@ class AutoClipperService(BaseService):
             # Read file content for this clip
             with open(clip_path, 'rb') as f:
                 file_content = f.read()
-                file_obj = BytesIO(file_content)
                 
                 # Create a mock UploadFile-like object
                 class MockUploadFile:
-                    def __init__(self, filename, file_obj, size):
+                    def __init__(self, filename, content, size):
                         self.filename = filename
-                        self.file = file_obj
+                        self.content = content
                         self.size = size
                     
                     async def read(self):
-                        return self.file.getvalue()
+                        return self.content
                 
                 upload_file = MockUploadFile(
                     filename=clip_filename,
-                    file_obj=file_obj,
+                    content=file_content,
                     size=len(file_content)
                 )
                 
@@ -325,7 +324,8 @@ class AutoClipperService(BaseService):
                     'end_time': segment['end_time'],
                     'duration': clip_duration,
                     'engagement_score': segment.get('engagement_score', 0),
-                    'file_path': clip_url,
+                    'file_path': clip_path,  # Keep the actual file path
+                    'url': clip_url,  # Store the URL separately
                     'file_name': clip_filename,
                     'aspect_ratio': aspect_ratio
                 }
@@ -362,7 +362,8 @@ class AutoClipperService(BaseService):
                 'total_clips': len(created_clips),
                 'clips': created_clips,
                 'original_video_info': video_info,
-                'original_video_url': video_url,
+                'original_video_path': video_path,  # Keep the actual file path
+                'original_video_url': video_url,  # Store the URL separately
                 'transcript': transcript_data.get('text', ''),
                 'processing_summary': {
                     'video_duration': video_info['duration'],

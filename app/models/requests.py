@@ -33,7 +33,9 @@ class ClipFromURLRequest(BaseModel):
                 "url": "https://www.tiktok.com/@user/video/1234567890",
                 "use_zapcap": False,
                 "zapcap_template_id": "d2018215-2125-41c1-940e-f13b411fff5c",
-                "aspect_ratio": "9:16"
+                "aspect_ratio": "9:16",
+                "max_clips": 5,
+                "zapcap_language": "en"
             }
         }
     )
@@ -42,6 +44,8 @@ class ClipFromURLRequest(BaseModel):
     use_zapcap: bool = Field(False, description="Whether to add captions using ZapCap service")
     zapcap_template_id: Optional[str] = Field(None, description="Custom ZapCap template ID")
     aspect_ratio: AspectRatio = Field(AspectRatio.NINE_SIXTEEN, description="Output aspect ratio")
+    max_clips: int = Field(5, ge=1, le=10, description="Maximum number of clips to generate")
+    zapcap_language: ZapCapLanguage = Field(ZapCapLanguage.ENGLISH, description="Language for captions")
     
     @field_validator('url')
     @classmethod

@@ -64,7 +64,7 @@ async def create_clips_from_upload(
     
     This endpoint accepts a video file upload and starts an asynchronous task
     to process it into short clips suitable for social media platforms.
-    
+    https://web2-clipper-academy-be.7b0fqh.easypanel.host/data/clips/clip_1749811681_3_The_Power_of_Dollar_Cost_Averaging.mp4
     Returns a task ID that can be used to check the processing status.
     """
     try:
@@ -122,9 +122,14 @@ async def create_clips_from_upload(
 @router.post("/url", response_model=TaskResponse)
 async def create_clips_from_url(
     background_tasks: BackgroundTasks,
-    request: Request,
-    req: ClipFromURLRequest,
-    service: AutoClipperService = Depends(get_auto_clipper_service)
+    url: str = Form(..., description="URL of the video to process"),
+    use_zapcap: bool = Form(False),
+    zapcap_template_id: Optional[str] = Form(None),
+    zapcap_language: str = Form("en"),
+    aspect_ratio: str = Form("9:16"),
+    max_clips: int = Form(5),
+    service: AutoClipperService = Depends(get_auto_clipper_service),
+    request: Request = None
 ) -> TaskResponse:
     """
     Create clips from social media URL (async)
@@ -134,17 +139,44 @@ async def create_clips_from_url(
     
     Returns a task ID that can be used to check the processing status.
     """
+    # Basic request logging
+    print("=== REQUEST RECEIVED ===")
+    print(f"Method: {request.method}")
+    print(f"URL: {request.url}")
+    print(f"Headers: {dict(request.headers)}")
+    
+    # Log raw request body
     try:
-        logger.info(f"Starting async processing for URL: {req.url}")
+        body = await request.body()
+        print(f"Raw body: {body.decode()}")
+    except Exception as e:
+        print(f"Error reading body: {e}")
+    print("======================")
+    
+    try:
+        # Log request details
+        logger.info("Received request to create clips from URL")
+        logger.info(f"URL: {url}")
+        logger.info(f"Content-Type: {request.headers.get('content-type')}")
+        logger.info(f"Request headers: {dict(request.headers)}")
+        
+        logger.info(f"Starting async processing for URL: {url}")
+        
+        # Parse enum values
+        try:
+            aspect_ratio_enum = AspectRatio(aspect_ratio)
+            zapcap_language_enum = ZapCapLanguage(zapcap_language)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid parameter: {str(e)}")
         
         # Create task
         task_id = await task_manager.create_task(
             "clip_url",
             metadata={
-                "url": str(req.url),
-                "use_zapcap": req.use_zapcap,
-                "aspect_ratio": req.aspect_ratio.value,
-                "max_clips": req.max_clips
+                "url": url,
+                "use_zapcap": use_zapcap,
+                "aspect_ratio": aspect_ratio,
+                "max_clips": max_clips
             }
         )
         
@@ -153,13 +185,11 @@ async def create_clips_from_url(
             process_clip_task,
             task_id=task_id,
             service=service,
-            process_func=service.create_clips_from_url,
-            url=str(req.url),
-            use_zapcap=req.use_zapcap,
-            zapcap_template_id=req.zapcap_template_id,
-            zapcap_language=req.zapcap_language,
-            aspect_ratio=req.aspect_ratio,
-            max_clips=req.max_clips,
+            process_func=service.process_video,
+            video_input=url,
+            use_zapcap=use_zapcap,
+            zapcap_template_id=zapcap_template_id,
+            aspect_ratio=aspect_ratio_enum.value,
             request=request
         )
         
@@ -169,6 +199,8 @@ async def create_clips_from_url(
         
     except Exception as e:
         logger.error(f"Failed to start URL processing: {e}")
+        if hasattr(e, 'errors'):
+            logger.error(f"Validation errors: {e.errors()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/file", response_model=TaskResponse)

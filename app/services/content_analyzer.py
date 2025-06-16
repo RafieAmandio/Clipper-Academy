@@ -144,13 +144,15 @@ class ContentAnalyzerService(BaseService):
             url: Social media URL
             
         Returns:
-            Platform name (tiktok, instagram, unknown)
+            Platform name (tiktok, instagram, youtube, unknown)
         """
         url = url.lower()
         if 'tiktok.com' in url:
             return 'tiktok'
         elif 'instagram.com' in url:
             return 'instagram'
+        elif 'youtube.com' in url or 'youtu.be' in url:
+            return 'youtube'
         else:
             return 'unknown'
     
@@ -172,6 +174,14 @@ class ContentAnalyzerService(BaseService):
                 return match.group(1)
         elif platform == 'instagram':
             match = re.search(r'/(?:p|reel|tv|reels)/([A-Za-z0-9_-]+)', url, re.IGNORECASE)
+            if match:
+                return match.group(1)
+        elif platform == 'youtube':
+            # Handle both youtube.com and youtu.be URLs
+            if 'youtu.be' in url:
+                match = re.search(r'youtu\.be/([A-Za-z0-9_-]+)', url)
+            else:
+                match = re.search(r'(?:v=|/)([A-Za-z0-9_-]{11})(?:\?|&|$)', url)
             if match:
                 return match.group(1)
         
@@ -200,6 +210,8 @@ class ContentAnalyzerService(BaseService):
                 return self._download_tiktok(url, post_dir, post_id)
             elif platform == 'instagram':
                 return self._download_instagram(url, post_dir, post_id)
+            elif platform == 'youtube':
+                return self._download_youtube(url, post_dir, post_id)
             else:
                 raise DownloadError(f'Unsupported platform: {platform}')
                 
@@ -332,6 +344,145 @@ class ContentAnalyzerService(BaseService):
         
         self.save_metrics_to_json(metrics, post_dir, 'instagram', post_id)
         return data, video_file, post_dir, 'instagram', post_id, metrics
+    
+    def _download_youtube(self, url: str, post_dir: str, post_id: str) -> Tuple[Dict, Optional[str], str, str, str, Dict]:
+        """Download YouTube video using yt-dlp library"""
+        import yt_dlp
+        
+        class DownloadLogger:
+            def __init__(self, logger):
+                self.logger = logger
+
+            def debug(self, msg):
+                if msg.startswith('[debug] '):
+                    self.logger.debug(msg[8:])
+                else:
+                    self.info(msg)
+
+            def info(self, msg):
+                self.logger.info(msg)
+
+            def warning(self, msg):
+                self.logger.warning(msg)
+
+            def error(self, msg):
+                self.logger.error(msg)
+
+        def download_progress_hook(d):
+            if d['status'] == 'downloading':
+                self.logger.info(f"Downloading: {d.get('_percent_str', '0%')} of {d.get('_total_bytes_str', 'N/A')}")
+            elif d['status'] == 'finished':
+                self.logger.info('Download completed, starting post-processing...')
+
+        try:
+            # Configure yt-dlp options
+            ydl_opts = {
+                'format': 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]',
+                'outtmpl': os.path.join(post_dir, f"{post_id}.%(ext)s"),
+                'noplaylist': True,
+                'logger': DownloadLogger(self.logger),
+                'progress_hooks': [download_progress_hook],
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': False,
+                'retries': 10,
+                'fragment_retries': 10,
+                'skip_unavailable_fragments': True,
+                'user_agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'http_headers': {
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-us,en;q=0.5',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'none',
+                    'Sec-Fetch-User': '?1',
+                    'Upgrade-Insecure-Requests': '1',
+                },
+                'socket_timeout': 30,
+                'extractor_retries': 5,
+                'ignoreerrors': False,
+                'no_color': True,
+                'geo_bypass': True,
+                'geo_verification_proxy': None,
+            }
+
+            # Try to use cookies from various browsers, but don't fail if not found
+            try:
+                ydl_opts['cookiesfrombrowser'] = [
+                    ('chrome',),
+                    ('firefox',),
+                    ('safari',),
+                    ('edge',),
+                ]
+            except Exception as e:
+                self.logger.warning(f"Could not set up browser cookies: {e}")
+
+            # First get video info without downloading
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                self.logger.info(f"Extracting info for YouTube video: {url}")
+                try:
+                    data = ydl.extract_info(url, download=False)
+                    data = ydl.sanitize_info(data)  # Make info json-serializable
+                except Exception as e:
+                    self.logger.error(f"Error extracting video info: {e}")
+                    # Try again with different format
+                    ydl_opts['format'] = 'best[height<=720]'
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl2:
+                        data = ydl2.extract_info(url, download=False)
+                        data = ydl2.sanitize_info(data)
+
+            # Now download the video
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                self.logger.info(f"Downloading YouTube video: {url}")
+                try:
+                    ydl.download([url])
+                except Exception as e:
+                    self.logger.error(f"Error with first download attempt: {e}")
+                    # Try again with different format
+                    ydl_opts['format'] = 'best[height<=720]'
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl2:
+                        ydl2.download([url])
+
+            # Find downloaded file
+            video_file = None
+            for file in os.listdir(post_dir):
+                if file.startswith(post_id) and file.endswith(('.mp4', '.mkv', '.webm')):
+                    video_file = os.path.join(post_dir, file)
+                    break
+
+            if not video_file:
+                raise DownloadError("Video file not found after download")
+
+            # Create metrics
+            metrics = {
+                'platform': 'youtube',
+                'url': url,
+                'post_id': post_id,
+                'title': data.get('title', 'N/A'),
+                'description': data.get('description', ''),
+                'uploader': data.get('uploader', 'N/A'),
+                'uploader_id': data.get('uploader_id', 'N/A'),
+                'upload_date': data.get('upload_date', 'N/A'),
+                'duration': data.get('duration', 'N/A'),
+                'view_count': data.get('view_count', 'N/A'),
+                'like_count': data.get('like_count', 'N/A'),
+                'comment_count': data.get('comment_count', 'N/A'),
+                'scraped_at': datetime.now().isoformat(),
+                'storage_directory': post_dir,
+                'format': data.get('format', 'N/A'),
+                'resolution': data.get('resolution', 'N/A'),
+                'filesize': data.get('filesize', 'N/A'),
+                'thumbnail': data.get('thumbnail', 'N/A'),
+            }
+
+            if video_file:
+                metrics['media_file'] = video_file
+
+            self.save_metrics_to_json(metrics, post_dir, 'youtube', post_id)
+            return data, video_file, post_dir, 'youtube', post_id, metrics
+
+        except Exception as e:
+            self.logger.error(f"Error downloading YouTube video: {e}")
+            raise DownloadError(f"Failed to download YouTube video: {e}")
     
     def save_metrics_to_json(self, metrics: Dict, post_dir: str, platform: str, post_id: str) -> str:
         """Save metrics to JSON file
