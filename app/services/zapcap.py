@@ -48,8 +48,14 @@ class ZapCapService(BaseService):
             StorageError: If file save fails
         """
         try:
-            file_extension = os.path.splitext(upload_file.filename or "video.mp4")[1]
-            temp_file_path = os.path.join(self.settings.upload_dir, f"upload_{int(time.time())}{file_extension}")
+            # Get original filename and extension
+            original_filename = upload_file.filename or "video.mp4"
+            name, ext = os.path.splitext(original_filename)
+            
+            # Create unique filename with timestamp and original name
+            timestamp = int(time.time())
+            unique_filename = f"upload_{timestamp}_{name}{ext}"
+            temp_file_path = os.path.join(self.settings.upload_dir, unique_filename)
             
             async with aiofiles.open(temp_file_path, 'wb') as temp_file:
                 content = await upload_file.read()
@@ -322,8 +328,10 @@ class ZapCapService(BaseService):
         try:
             # Step 1: Save uploaded file
             temp_file_path = await self.save_upload_file(upload_file)
+            
             # Step 2: Upload to ZapCap
             video_id = await self.upload_video(temp_file_path)
+            
             # Step 3: Create captioning task
             task_id = await self.create_caption_task(
                 video_id, 
@@ -331,16 +339,30 @@ class ZapCapService(BaseService):
                 language=language, 
                 auto_approve=auto_approve
             )
+            
             # Step 4: Wait for completion
             status_data = await self.wait_for_completion(video_id, task_id)
+            
             # Step 5: Extract download URL
             download_url = status_data.get("downloadUrl")
             if not download_url:
                 raise ZapCapError("Download URL not found in response")
+            
             # Step 6: Download result
             result_path = await self.download_result_video(download_url, video_id, upload_file.filename)
+            
+            # Ensure the result path is in the correct directory
+            if not result_path.startswith(self.settings.results_dir):
+                # Move the file to the results directory if it's not already there
+                filename = os.path.basename(result_path)
+                new_path = os.path.join(self.settings.results_dir, filename)
+                if os.path.exists(result_path):
+                    os.rename(result_path, new_path)
+                result_path = new_path
+            
             processing_time = time.time() - start_time
             video_name = os.path.basename(result_path)
+            
             return {
                 "success": True,
                 "message": "Video captioning completed successfully",

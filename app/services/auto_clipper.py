@@ -5,6 +5,7 @@ import asyncio
 from datetime import datetime
 from typing import Dict, List, Union, Optional
 from io import BytesIO
+import logging
 
 from fastapi import UploadFile, Request
 from openai import OpenAI
@@ -71,32 +72,62 @@ class AutoClipperService(BaseService):
             
             # AI prompt for clip analysis
             prompt = f"""
-            Analyze this video transcript with timestamps and identify the most engaging segments that would make good TikTok clips (30-60 seconds each).
+                        Analyze this video transcript and identify the most viral-worthy TikTok clips (30-60 seconds each). PRIORITIZE segments with explosive opening hooks in the first 3-5 seconds that instantly grab attention.
 
-            Video Duration: {self.format_timestamp(video_duration)}
+                        Video Duration: {self.format_timestamp(video_duration)}
 
-            Transcript with timestamps:
-            {transcript_text}
+                        Transcript with timestamps:
+                        {transcript_text}
 
-            Instructions:
-            1. Identify 2-5 segments that would make compelling short clips
-            2. Each segment should be 30-60 seconds long
-            3. Look for: hooks, punchlines, key moments, emotional peaks, educational insights, entertaining parts
-            4. Provide start and end times in MM:SS format
-            5. Give each clip a catchy title and brief description
+                        HOOK CRITERIA (Critical for first 5 seconds):
+                        - Shocking statements or controversial opinions
+                        - Bold claims or predictions
+                        - Questions that create curiosity gaps
+                        - Surprising facts or statistics
+                        - Dramatic story openings
+                        - Emotional triggers (anger, excitement, surprise)
+                        - "You won't believe..." or "This will change your mind..." moments
+                        - Counter-intuitive reveals
+                        - Personal confessions or vulnerable moments
 
-            Return ONLY a JSON array in this exact format:
-            [
-                {{
-                    "title": "Catchy clip title",
-                    "description": "Brief description of why this segment is engaging",
-                    "start_time": "MM:SS",
-                    "end_time": "MM:SS",
-                    "duration": 45,
-                    "engagement_score": 8.5
-                }}
-            ]
-            """
+                        SEGMENT SELECTION RULES:
+                        1. Find 2-5 segments with the STRONGEST opening hooks
+                        2. Each clip must be 30-60 seconds maximum
+                        3. Prioritize segments that:
+                        - Start with immediate impact (no slow build-up)
+                        - Have clear payoffs within 60 seconds
+                        - Create emotional reactions (shock, laughter, anger, curiosity)
+                        - Are self-contained stories or insights
+                        - End with satisfying conclusions or cliffhangers
+
+                        ENGAGEMENT MULTIPLIERS:
+                        - Controversial takes (+2 points)
+                        - Personal stories with universal appeal (+2 points)
+                        - Educational content with "mind-blown" moments (+1.5 points)
+                        - Comedy with quick punchlines (+1.5 points)
+                        - Behind-the-scenes revelations (+1 point)
+                        - Relatable struggles or wins (+1 point)
+
+                        AVOID:
+                        - Segments that require context from earlier in the video
+                        - Slow introductions or explanations
+                        - Technical content without clear benefits
+                        - Long setups without quick payoffs
+
+                        Return ONLY a JSON array in this exact format:
+                        [
+                            {{
+                                "title": "Catchy, curiosity-driven title that creates FOMO",
+                                "description": "Why this will stop scrollers dead - focus on the hook and emotional payoff",
+                                "start_time": "MM:SS",
+                                "end_time": "MM:SS",
+                                "duration": 45,
+                                "engagement_score": 8.5
+                            }}
+                        ]
+
+                        Sort results by engagement_score (highest first), prioritizing segments with the strongest opening hooks.
+                        """
             
             response = self.content_analyzer_service.client.chat.completions.create(
                 model="gpt-4o",
@@ -171,19 +202,40 @@ class AutoClipperService(BaseService):
             clip_path = clip_info['file_path']
             clip_filename = clip_info['file_name']
             
+            self.logger.info(f"Processing clip {clip_number}:")
+            self.logger.info(f"  - File path: {clip_path}")
+            self.logger.info(f"  - File name: {clip_filename}")
+            
             # Read file content for this clip
             with open(clip_path, 'rb') as f:
                 file_content = f.read()
+                self.logger.info(f"  - File size: {len(file_content)} bytes")
+                self.logger.info(f"  - First 32 bytes: {file_content[:32].hex()}")
                 
                 # Create a mock UploadFile-like object
                 class MockUploadFile:
                     def __init__(self, filename, content, size):
                         self.filename = filename
-                        self.content = content
+                        self._content = content
                         self.size = size
+                        self._position = 0
+                        self.logger = logging.getLogger(__name__)
                     
                     async def read(self):
-                        return self.content
+                        # Return a copy of the content to prevent sharing
+                        content_copy = self._content[:]
+                        self.logger.info(f"MockUploadFile.read() called for {self.filename}")
+                        self.logger.info(f"  - Content size: {len(content_copy)} bytes")
+                        self.logger.info(f"  - First 32 bytes: {content_copy[:32].hex()}")
+                        return content_copy
+                    
+                    async def seek(self, offset):
+                        self._position = offset
+                        self.logger.info(f"MockUploadFile.seek({offset}) called for {self.filename}")
+                    
+                    async def close(self):
+                        self.logger.info(f"MockUploadFile.close() called for {self.filename}")
+                        pass
                 
                 upload_file = MockUploadFile(
                     filename=clip_filename,
@@ -226,6 +278,11 @@ class AutoClipperService(BaseService):
                 self.logger.error(f"ZapCap processing failed for clip {clip_number} with exception: {result}")
                 zapcap_results[clip_number] = {'error': str(result)}
             elif result and isinstance(result, dict) and result.get('success', False):
+                self.logger.info(f"ZapCap processing successful for clip {clip_number}:")
+                self.logger.info(f"  - Video ID: {result.get('video_id')}")
+                self.logger.info(f"  - Task ID: {result.get('task_id')}")
+                self.logger.info(f"  - Result path: {result.get('result_file_path')}")
+                
                 zapcap_results[clip_number] = {
                     'video_id': result['video_id'],
                     'task_id': result['task_id'],
