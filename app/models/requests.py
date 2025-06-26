@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, HttpUrl, field_validator, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from app.models.enums import AspectRatio, ZapCapLanguage, ClipQuality, ContentCategory
+from datetime import datetime
 
 
 class ClipFromUploadRequest(BaseModel):
@@ -198,4 +199,113 @@ class ClipSegmentRequest(BaseModel):
     file_path: str = Field(..., description="Path to source video file")
     segments: List[dict] = Field(..., min_length=1, max_length=10, description="Custom clip segments")
     aspect_ratio: AspectRatio = Field(AspectRatio.NINE_SIXTEEN, description="Output aspect ratio")
-    use_zapcap: bool = Field(False, description="Whether to add captions using ZapCap service") 
+    use_zapcap: bool = Field(False, description="Whether to add captions using ZapCap service")
+
+
+class SocialMediaPostRequest(BaseModel):
+    """Request model for social media posting"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "platform": "tiktok",
+                "video_path": "data/clips/example_clip.mp4",
+                "caption": "Check out this amazing clip! #viral",
+                "hashtags": ["viral", "trending", "fyp"],
+                "scheduled_time": "2024-03-20T15:00:00Z",
+                "metadata": {
+                    "category": "entertainment",
+                    "tags": ["funny", "comedy"]
+                }
+            }
+        }
+    )
+    
+    platform: str = Field(..., description="Target social media platform (tiktok, instagram, youtube)")
+    video_path: str = Field(..., description="Path to the video file to post")
+    caption: str = Field(..., description="Post caption text")
+    hashtags: List[str] = Field(default_factory=list, description="List of hashtags to include")
+    scheduled_time: Optional[datetime] = Field(None, description="Optional scheduled posting time")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata for the post")
+
+
+class OAuthInitiateRequest(BaseModel):
+    """Request model for initiating OAuth flow"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "platform": "youtube",
+                "redirect_uri": "http://localhost:8000/api/v1/oauth/youtube/callback"
+            }
+        }
+    )
+    
+    platform: str = Field(..., description="Social media platform (youtube, instagram, tiktok)")
+    redirect_uri: Optional[str] = Field(None, description="Custom redirect URI (optional, will use default if not provided)")
+
+
+class SocialMediaUploadRequest(BaseModel):
+    """Request model for uploading clips to social media"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "clip_id": "clip_1234567890",
+                "platform": "youtube",
+                "title": "Amazing Video Clip",
+                "description": "Check out this incredible moment!",
+                "tags": ["viral", "trending"],
+                "privacy_status": "public",
+                "category_id": "22",
+                "made_for_kids": False,
+                "upload_as_shorts": True
+            }
+        }
+    )
+    
+    clip_id: str = Field(..., description="ID of the clip from the app's backend")
+    platform: str = Field(..., description="Target social media platform")
+    
+    # YouTube-specific fields
+    title: Optional[str] = Field(None, description="Video title (YouTube)")
+    description: Optional[str] = Field(None, description="Video description (YouTube)")
+    tags: List[str] = Field(default_factory=list, description="Video tags (YouTube)")
+    privacy_status: str = Field("public", description="Privacy status: public, private, unlisted (YouTube)")
+    category_id: Optional[str] = Field(None, description="Video category ID (YouTube)")
+    made_for_kids: bool = Field(False, description="Whether the video is made for kids (YouTube)")
+    upload_as_shorts: bool = Field(True, description="Whether to upload as YouTube Shorts (YouTube)")
+    
+    # Instagram-specific fields
+    caption: Optional[str] = Field(None, description="Post caption (Instagram)")
+    hashtags: List[str] = Field(default_factory=list, description="Hashtags (Instagram)")
+    
+    # TikTok-specific fields
+    visibility: str = Field("public", description="Video visibility: public, private (TikTok)")
+
+
+class ConnectionStatusRequest(BaseModel):
+    """Request model for checking connection status"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "platform": "youtube"
+            }
+        }
+    )
+    
+    platform: str = Field(..., description="Social media platform to check")
+
+
+class StoreTokenRequest(BaseModel):
+    """Request model for storing OAuth token from frontend OAuth flow"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "platform": "youtube",
+                "access_token": "ya29.a0AfH6SMC...",
+                "expires_in": "3600"
+            }
+        }
+    )
+    
+    platform: str = Field(..., description="Social media platform (youtube, instagram, tiktok)")
+    access_token: str = Field(..., description="OAuth access token received from the platform")
+    expires_in: Optional[str] = Field(None, description="Token expiration time in seconds") 

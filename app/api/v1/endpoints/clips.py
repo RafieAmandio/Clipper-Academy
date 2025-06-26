@@ -1,18 +1,22 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import logging
 from datetime import datetime
 import asyncio
+import os
+import glob
+from pathlib import Path
 
 from app.services.auto_clipper import AutoClipperService
-from app.core.dependencies import get_auto_clipper_service
+from app.core.dependencies import get_auto_clipper_service, get_settings
 from app.models.requests import ClipFromURLRequest, ClipFromFilePathRequest
 from app.models.responses import ClipResponse, ErrorResponse
 from app.models.tasks import TaskResponse
 from app.models.enums import AspectRatio, ZapCapLanguage
 from app.core.exceptions import VideoProcessingError, TranscriptionError, ContentAnalysisError, ZapCapError
 from app.services.task_manager import task_manager, TaskStatus
+from app.config.settings import Settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -253,4 +257,111 @@ async def create_clips_from_file_path(
         
     except Exception as e:
         logger.error(f"Failed to start file processing: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) 
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/", response_model=List[Dict[str, Any]])
+async def list_clips(settings: Settings = Depends(get_settings)):
+    """
+    List all available clips
+    
+    Returns a list of clips stored in the results directory.
+    """
+    try:
+        clips = []
+        
+        # Only check results directory for final clips
+        directories = [settings.results_dir]
+        
+        logger.info(f"Searching for clips in directories: {directories}")
+        
+        for directory in directories:
+            logger.info(f"Checking directory: {directory}")
+            if os.path.exists(directory):
+                logger.info(f"Directory exists: {directory}")
+                # Find all video files
+                video_extensions = ['*.mp4', '*.mov', '*.avi', '*.mkv', '*.webm']
+                
+                for ext in video_extensions:
+                    pattern = os.path.join(directory, ext)
+                    files = glob.glob(pattern)
+                    logger.info(f"Found {len(files)} files with pattern {pattern}")
+                    
+                    for file_path in files:
+                        file_stat = os.stat(file_path)
+                        file_name = os.path.basename(file_path)
+                        
+                        # Create relative URL for accessing the file
+                        relative_path = os.path.relpath(file_path, 'data')
+                        file_url = f"/data/{relative_path}"
+                        
+                        clips.append({
+                            "id": file_name,
+                            "name": file_name,
+                            "path": file_path,
+                            "url": file_url,
+                            "size": file_stat.st_size,
+                            "created_at": datetime.fromtimestamp(file_stat.st_ctime).isoformat(),
+                            "modified_at": datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
+                            "directory": directory
+                        })
+            else:
+                logger.warning(f"Directory does not exist: {directory}")
+        
+        # Sort by creation time (newest first)
+        clips.sort(key=lambda x: x["created_at"], reverse=True)
+        
+        logger.info(f"Found {len(clips)} clips total")
+        return clips
+        
+    except Exception as e:
+        logger.error(f"Failed to list clips: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to list clips: {str(e)}")
+
+@router.get("/{clip_id}")
+async def get_clip(clip_id: str, settings: Settings = Depends(get_settings)):
+    """
+    Get information about a specific clip
+    
+    Returns detailed information about a clip by its ID.
+    """
+    try:
+        # Search for the clip in results directory only
+        directories = [settings.results_dir]
+        
+        for directory in directories:
+            if os.path.exists(directory):
+                # Look for files that match the clip_id
+                video_extensions = ['*.mp4', '*.mov', '*.avi', '*.mkv', '*.webm']
+                
+                for ext in video_extensions:
+                    pattern = os.path.join(directory, f"*{clip_id}*{ext}")
+                    files = glob.glob(pattern)
+                    
+                    if files:
+                        file_path = files[0]  # Take the first match
+                        file_stat = os.stat(file_path)
+                        file_name = os.path.basename(file_path)
+                        
+                        # Create relative URL for accessing the file
+                        relative_path = os.path.relpath(file_path, 'data')
+                        file_url = f"/data/{relative_path}"
+                        
+                        return {
+                            "id": clip_id,
+                            "name": file_name,
+                            "path": file_path,
+                            "url": file_url,
+                            "size": file_stat.st_size,
+                            "created_at": datetime.fromtimestamp(file_stat.st_ctime).isoformat(),
+                            "modified_at": datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
+                            "directory": directory
+                        }
+        
+        # Clip not found
+        raise HTTPException(status_code=404, detail=f"Clip with ID '{clip_id}' not found")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get clip {clip_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get clip: {str(e)}") 

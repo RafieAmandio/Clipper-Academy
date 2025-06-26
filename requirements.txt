@@ -25,6 +25,13 @@ ffmpeg-python==0.2.0
 # Social Media Content Downloading
 yt-dlp==2023.11.16
 
+# Social Media APIs
+tiktok-api==0.10.5
+instagram-private-api==1.6.0
+google-api-python-client==2.108.0
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+
 # Type Annotations
 typing-extensions==4.8.0
 

@@ -346,4 +346,127 @@ class BatchClipResponse(BaseModel):
     successful: int = Field(..., description="Number of successful processings")
     failed: int = Field(..., description="Number of failed processings")
     results: List[Union[ClipResponse, ErrorResponse]] = Field(..., description="Individual results")
-    processing_time: float = Field(..., description="Total batch processing time") 
+    processing_time: float = Field(..., description="Total batch processing time")
+
+
+class SocialMediaPostResponse(BaseModel):
+    """Response model for social media posting"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "success": True,
+                "message": "Successfully posted to tiktok",
+                "platform": "tiktok",
+                "post_data": {
+                    "video_path": "data/clips/example_clip.mp4",
+                    "caption": "Check out this amazing clip!\n\n#viral #trending #fyp",
+                    "scheduled_time": "2024-03-20T15:00:00Z"
+                },
+                "result": {
+                    "post_id": "123456789",
+                    "url": "https://tiktok.com/@user/video/123456789"
+                },
+                "processing_time": 2.5
+            }
+        }
+    )
+    
+    success: bool = Field(..., description="Whether the operation was successful")
+    message: str = Field(..., description="Status message")
+    platform: str = Field(..., description="Target platform")
+    post_data: Dict[str, Any] = Field(..., description="Post data that was processed")
+    result: Optional[Dict[str, Any]] = Field(None, description="Platform-specific result data")
+    processing_time: float = Field(..., description="Processing time in seconds")
+
+
+class AuthResponse(BaseModel):
+    """Response model for authentication operations"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "success": True,
+                "message": "Successfully authenticated with TikTok",
+                "platform": "tiktok",
+                "access_token": "eyJhbGciOiJIUzI1NiIs..."
+            }
+        }
+    )
+    
+    success: bool = Field(..., description="Whether the operation was successful")
+    message: str = Field(..., description="Status message")
+    platform: str = Field(..., description="Social media platform")
+    access_token: str = Field(..., description="OAuth access token")
+
+
+class OAuthInitiateResponse(BaseModel):
+    """Response model for OAuth initiation"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "success": True,
+                "message": "OAuth URL generated successfully",
+                "platform": "youtube",
+                "auth_url": "https://accounts.google.com/o/oauth2/auth?...",
+                "state": "random_state_string"
+            }
+        }
+    )
+    
+    success: bool = Field(..., description="Whether the operation was successful")
+    message: str = Field(..., description="Status message")
+    platform: str = Field(..., description="Social media platform")
+    auth_url: str = Field(..., description="OAuth authorization URL")
+    state: str = Field(..., description="OAuth state parameter for security")
+
+
+class ConnectionStatusResponse(BaseModel):
+    """Response model for connection status check"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "success": True,
+                "message": "Connection status retrieved",
+                "platform": "youtube",
+                "connected": True,
+                "user_info": {
+                    "username": "example_user",
+                    "channel_id": "UC123456789"
+                },
+                "expires_at": "2024-12-31T23:59:59Z"
+            }
+        }
+    )
+    
+    success: bool = Field(..., description="Whether the operation was successful")
+    message: str = Field(..., description="Status message")
+    platform: str = Field(..., description="Social media platform")
+    connected: bool = Field(..., description="Whether the account is connected")
+    user_info: Optional[Dict[str, Any]] = Field(None, description="User account information")
+    expires_at: Optional[str] = Field(None, description="Token expiration time")
+
+
+class SocialMediaUploadResponse(BaseModel):
+    """Response model for social media upload operations"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "success": True,
+                "message": "Video uploaded successfully to YouTube",
+                "platform": "youtube",
+                "clip_id": "clip_1234567890",
+                "upload_result": {
+                    "video_id": "dQw4w9WgXcQ",
+                    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                    "title": "Amazing Video Clip"
+                },
+                "processing_time": 45.2
+            }
+        }
+    )
+    
+    success: bool = Field(..., description="Whether the upload was successful")
+    message: str = Field(..., description="Status message")
+    platform: str = Field(..., description="Target social media platform")
+    clip_id: str = Field(..., description="Original clip ID")
+    upload_result: Optional[Dict[str, Any]] = Field(None, description="Platform-specific upload result")
+    processing_time: float = Field(..., description="Upload processing time in seconds") 

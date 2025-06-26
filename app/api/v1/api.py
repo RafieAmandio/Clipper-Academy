@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import clips, health, analysis, tasks
+from app.api.v1.endpoints import clips, health, analysis, tasks, oauth
 
 api_router = APIRouter()
 
@@ -42,4 +42,6 @@ api_router.include_router(
         500: {"description": "Internal server error"},
         404: {"description": "Task not found"}
     }
-) 
+)
+
+api_router.include_router(oauth.router, prefix="/oauth", tags=["oauth"]) 

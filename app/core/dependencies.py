@@ -9,7 +9,12 @@ from app.services.video_processing import VideoProcessingService
 from app.services.zapcap import ZapCapService
 from app.services.content_analyzer import ContentAnalyzerService
 from app.services.auto_clipper import AutoClipperService
+from app.services.social_media_service import SocialMediaService
+from app.services.oauth_service import OAuthService
+from app.services.social_upload_service import SocialUploadService
 
+# Global OAuth service instance for state persistence
+_oauth_service_instance = None
 
 @lru_cache()
 def get_settings() -> Settings:
@@ -55,4 +60,25 @@ def get_auto_clipper_service(
     openai_client: OpenAI = Depends(get_openai_client)
 ) -> AutoClipperService:
     """Get auto clipper service instance"""
-    return AutoClipperService(settings, openai_client) 
+    return AutoClipperService(settings, openai_client)
+
+
+def get_social_media_service(settings: Settings = Depends(get_settings)) -> SocialMediaService:
+    """Get social media service instance"""
+    return SocialMediaService(settings)
+
+
+def get_oauth_service(settings: Settings = Depends(get_settings)) -> OAuthService:
+    """Get OAuth service instance (singleton for state persistence)"""
+    global _oauth_service_instance
+    if _oauth_service_instance is None:
+        _oauth_service_instance = OAuthService(settings)
+    return _oauth_service_instance
+
+
+def get_social_upload_service(
+    settings: Settings = Depends(get_settings),
+    oauth_service: OAuthService = Depends(get_oauth_service)
+) -> SocialUploadService:
+    """Get social upload service instance"""
+    return SocialUploadService(settings, oauth_service) 

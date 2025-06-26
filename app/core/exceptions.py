@@ -43,4 +43,14 @@ class ValidationError(ClipperException):
 
 class ContentAnalysisError(ClipperException):
     """Error during content analysis"""
+    pass
+
+
+class SocialMediaError(ClipperException):
+    """Error during social media operations (upload, authentication, etc.)"""
+    pass
+
+
+class OAuthError(ClipperException):
+    """Error during OAuth operations (authentication, token management, etc.)"""
     pass 
