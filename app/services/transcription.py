@@ -184,6 +184,7 @@ class TranscriptionService(BaseService):
                     'segments': [],
                     'words': [],
                     'text': '',
+                    'language': 'en',
                     'success': False
                 }
             
@@ -207,10 +208,11 @@ class TranscriptionService(BaseService):
                 'segments': segments or [],
                 'words': words or [],
                 'text': chunk_data_dict.get('text', ''),
+                'language': chunk_data_dict.get('language', 'en'),
                 'success': True
             }
             
-            self.logger.info(f"Chunk {chunk_index + 1} processed: {len(segments or [])} segments, {len(words or [])} words")
+            self.logger.info(f"Chunk {chunk_index + 1} processed: {len(segments or [])} segments, {len(words or [])} words, language: {result['language']}")
             return result
             
         except Exception as chunk_error:
@@ -220,6 +222,7 @@ class TranscriptionService(BaseService):
                 'segments': [],
                 'words': [],
                 'text': '',
+                'language': 'en',
                 'success': False,
                 'error': str(chunk_error)
             }
@@ -294,7 +297,7 @@ class TranscriptionService(BaseService):
                     )
                 
                 result = transcript.model_dump()
-                self.logger.info("Single-file transcription completed")
+                self.logger.info(f"Single-file transcription completed, detected language: {result.get('language', 'en')}")
                 return result
             
             else:
@@ -308,6 +311,7 @@ class TranscriptionService(BaseService):
                 all_segments = []
                 all_words = []
                 full_text = ""
+                detected_languages = []
                 
                 chunk_results.sort(key=lambda x: x.get('chunk_index', 0))
                 
@@ -321,6 +325,11 @@ class TranscriptionService(BaseService):
                             full_text += " " + chunk_text
                         else:
                             full_text = chunk_text
+                    
+                    # Collect detected languages
+                    chunk_language = result.get('language', 'en')
+                    if chunk_language and chunk_language != 'en':
+                        detected_languages.append(chunk_language)
                 
                 # Clean up chunk files
                 for chunk_data in chunk_info:
@@ -332,14 +341,26 @@ class TranscriptionService(BaseService):
                         except OSError:
                             pass
                 
+                # Determine final language (use most common detected language, fallback to 'en')
+                final_language = 'en'
+                if detected_languages:
+                    # Count language occurrences
+                    language_counts = {}
+                    for lang in detected_languages:
+                        language_counts[lang] = language_counts.get(lang, 0) + 1
+                    
+                    # Use most common language
+                    if language_counts:
+                        final_language = max(language_counts, key=language_counts.get)
+                
                 merged_transcript = {
                     'text': full_text,
                     'segments': all_segments,
                     'words': all_words,
-                    'language': 'en'
+                    'language': final_language
                 }
                 
-                self.logger.info(f"Multi-chunk transcription completed: {len(all_segments)} segments, {len(all_words)} words")
+                self.logger.info(f"Multi-chunk transcription completed: {len(all_segments)} segments, {len(all_words)} words, detected language: {final_language}")
                 return merged_transcript
                 
         except Exception as e:
