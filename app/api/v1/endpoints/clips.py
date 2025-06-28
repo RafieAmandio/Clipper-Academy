@@ -7,6 +7,7 @@ import asyncio
 import os
 import glob
 from pathlib import Path
+import json
 
 from app.services.auto_clipper import AutoClipperService
 from app.core.dependencies import get_auto_clipper_service, get_settings
@@ -259,6 +260,95 @@ async def create_clips_from_file_path(
         logger.error(f"Failed to start file processing: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/metadata", response_model=List[Dict[str, Any]])
+async def get_clips_metadata(settings: Settings = Depends(get_settings)):
+    """
+    Get clips metadata from JSON files
+    
+    Returns the contents of all clips_metadata_*.json files in the results directory.
+    This provides the full clip information including titles, descriptions, scores, and URLs.
+    """
+    try:
+        all_clips = []
+        
+        # Find all clips_metadata_*.json files in results directory
+        pattern = os.path.join(settings.results_dir, "clips_metadata_*.json")
+        metadata_files = glob.glob(pattern)
+        
+        logger.info(f"Found {len(metadata_files)} metadata files: {metadata_files}")
+        
+        for metadata_file in metadata_files:
+            try:
+                with open(metadata_file, 'r', encoding='utf-8') as f:
+                    clips_data = json.load(f)
+                    if isinstance(clips_data, list):
+                        all_clips.extend(clips_data)
+                    else:
+                        all_clips.append(clips_data)
+                logger.info(f"Loaded {len(clips_data) if isinstance(clips_data, list) else 1} clips from {metadata_file}")
+            except Exception as e:
+                logger.error(f"Error loading metadata file {metadata_file}: {e}")
+                continue
+        
+        # Sort by creation time (newest first) - use clip_number as fallback
+        all_clips.sort(key=lambda x: x.get("clip_number", 0), reverse=True)
+        
+        logger.info(f"Returning {len(all_clips)} total clips from metadata")
+        return all_clips
+        
+    except Exception as e:
+        logger.error(f"Failed to get clips metadata: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get clips metadata: {str(e)}")
+
+@router.get("/{clip_id}")
+async def get_clip(clip_id: str, settings: Settings = Depends(get_settings)):
+    """
+    Get information about a specific clip
+    
+    Returns detailed information about a clip by its ID.
+    """
+    try:
+        # Search for the clip in results directory only
+        directories = [settings.results_dir]
+        
+        for directory in directories:
+            if os.path.exists(directory):
+                # Look for files that match the clip_id
+                video_extensions = ['*.mp4', '*.mov', '*.avi', '*.mkv', '*.webm']
+                
+                for ext in video_extensions:
+                    pattern = os.path.join(directory, f"*{clip_id}*{ext}")
+                    files = glob.glob(pattern)
+                    
+                    if files:
+                        file_path = files[0]  # Take the first match
+                        file_stat = os.stat(file_path)
+                        file_name = os.path.basename(file_path)
+                        
+                        # Create relative URL for accessing the file
+                        relative_path = os.path.relpath(file_path, 'data')
+                        file_url = f"/data/{relative_path}"
+                        
+                        return {
+                            "id": clip_id,
+                            "name": file_name,
+                            "path": file_path,
+                            "url": file_url,
+                            "size": file_stat.st_size,
+                            "created_at": datetime.fromtimestamp(file_stat.st_ctime).isoformat(),
+                            "modified_at": datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
+                            "directory": directory
+                        }
+        
+        # Clip not found
+        raise HTTPException(status_code=404, detail=f"Clip with ID '{clip_id}' not found")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get clip {clip_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get clip: {str(e)}")
+
 @router.get("/", response_model=List[Dict[str, Any]])
 async def list_clips(settings: Settings = Depends(get_settings)):
     """
@@ -315,53 +405,4 @@ async def list_clips(settings: Settings = Depends(get_settings)):
         
     except Exception as e:
         logger.error(f"Failed to list clips: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to list clips: {str(e)}")
-
-@router.get("/{clip_id}")
-async def get_clip(clip_id: str, settings: Settings = Depends(get_settings)):
-    """
-    Get information about a specific clip
-    
-    Returns detailed information about a clip by its ID.
-    """
-    try:
-        # Search for the clip in results directory only
-        directories = [settings.results_dir]
-        
-        for directory in directories:
-            if os.path.exists(directory):
-                # Look for files that match the clip_id
-                video_extensions = ['*.mp4', '*.mov', '*.avi', '*.mkv', '*.webm']
-                
-                for ext in video_extensions:
-                    pattern = os.path.join(directory, f"*{clip_id}*{ext}")
-                    files = glob.glob(pattern)
-                    
-                    if files:
-                        file_path = files[0]  # Take the first match
-                        file_stat = os.stat(file_path)
-                        file_name = os.path.basename(file_path)
-                        
-                        # Create relative URL for accessing the file
-                        relative_path = os.path.relpath(file_path, 'data')
-                        file_url = f"/data/{relative_path}"
-                        
-                        return {
-                            "id": clip_id,
-                            "name": file_name,
-                            "path": file_path,
-                            "url": file_url,
-                            "size": file_stat.st_size,
-                            "created_at": datetime.fromtimestamp(file_stat.st_ctime).isoformat(),
-                            "modified_at": datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
-                            "directory": directory
-                        }
-        
-        # Clip not found
-        raise HTTPException(status_code=404, detail=f"Clip with ID '{clip_id}' not found")
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get clip {clip_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get clip: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Failed to list clips: {str(e)}") 

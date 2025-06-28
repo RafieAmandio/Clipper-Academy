@@ -9,6 +9,7 @@ import logging
 
 from fastapi import UploadFile, Request
 from openai import OpenAI
+from fastapi.staticfiles import StaticFiles
 
 from app.services.base import BaseService
 from app.config.settings import Settings
@@ -72,62 +73,133 @@ class AutoClipperService(BaseService):
             
             # AI prompt for clip analysis
             prompt = f"""
-                        Analyze this video transcript and identify the most viral-worthy TikTok clips (30-60 seconds each). PRIORITIZE segments with explosive opening hooks in the first 3-5 seconds that instantly grab attention.
+You are an expert TikTok content strategist and video editor. Analyze this video transcript and identify the most viral-worthy TikTok clips (prefer 20-45 seconds each, never over 60s). Your goal is to find segments that will STOP SCROLLERS DEAD and create maximum engagement.
 
-                        Video Duration: {self.format_timestamp(video_duration)}
+**IMPORTANT INSTRUCTIONS:**
+- For each clip, the `title` MUST summarize the ACTUAL content of the segment, not just a generic viral phrase. Use the transcript text for inspiration and make the title a true summary or "hook" of the specific segment.
+- The `description` must explain why this specific segment is engaging, referencing the actual words or story in the transcript.
+- If there are multiple viral moments close together, make SEPARATE clips for each. Do NOT merge multiple viral moments into one long clip.
+- Prefer more, shorter clips (20-45s) over fewer, longer ones. If a segment is over 45s, try to split it into two or more focused clips.
+- Never use generic or repeated titles. Each title must be unique and specific to the segment.
+- If a segment contains a clear change in topic, emotion, or hook, split it into separate clips.
+- Do NOT create clips that are just generic advice or filler; focus on moments with a clear hook, payoff, or emotional impact.
 
-                        Transcript with timestamps:
-                        {transcript_text}
+Video Duration: {self.format_timestamp(video_duration)}
 
-                        HOOK CRITERIA (Critical for first 5 seconds):
-                        - Shocking statements or controversial opinions
-                        - Bold claims or predictions
-                        - Questions that create curiosity gaps
-                        - Surprising facts or statistics
-                        - Dramatic story openings
-                        - Emotional triggers (anger, excitement, surprise)
-                        - "You won't believe..." or "This will change your mind..." moments
-                        - Counter-intuitive reveals
-                        - Personal confessions or vulnerable moments
+Transcript with timestamps:
+{transcript_text}
 
-                        SEGMENT SELECTION RULES:
-                        1. Find 2-5 segments with the STRONGEST opening hooks
-                        2. Each clip must be 30-60 seconds maximum
-                        3. Prioritize segments that:
-                        - Start with immediate impact (no slow build-up)
-                        - Have clear payoffs within 60 seconds
-                        - Create emotional reactions (shock, laughter, anger, curiosity)
-                        - Are self-contained stories or insights
-                        - End with satisfying conclusions or cliffhangers
+CRITICAL HOOK ANALYSIS (First 3-5 seconds):
+Look for these EXACT hook patterns that make viewers pause:
 
-                        ENGAGEMENT MULTIPLIERS:
-                        - Controversial takes (+2 points)
-                        - Personal stories with universal appeal (+2 points)
-                        - Educational content with "mind-blown" moments (+1.5 points)
-                        - Comedy with quick punchlines (+1.5 points)
-                        - Behind-the-scenes revelations (+1 point)
-                        - Relatable struggles or wins (+1 point)
+🎯 SHOCK HOOKS (Highest Priority):
+- "I just found out..." + shocking revelation
+- "This is why..." + controversial statement
+- "The truth about..." + unexpected fact
+- "You've been lied to about..." + revelation
+- "I can't believe..." + surprising discovery
+- "This will change everything..." + bold claim
 
-                        AVOID:
-                        - Segments that require context from earlier in the video
-                        - Slow introductions or explanations
-                        - Technical content without clear benefits
-                        - Long setups without quick payoffs
+🎯 CURIOSITY HOOKS:
+- "Here's what nobody tells you..." + secret
+- "The real reason why..." + hidden truth
+- "What I discovered..." + personal revelation
+- "This is what actually happens..." + behind-the-scenes
+- "Why most people fail at..." + problem + solution
 
-                        Return ONLY a JSON array in this exact format:
-                        [
-                            {{
-                                "title": "Catchy, curiosity-driven title that creates FOMO",
-                                "description": "Why this will stop scrollers dead - focus on the hook and emotional payoff",
-                                "start_time": "MM:SS",
-                                "end_time": "MM:SS",
-                                "duration": 45,
-                                "engagement_score": 8.5
-                            }}
-                        ]
+🎯 EMOTIONAL HOOKS:
+- Personal confession that's relatable
+- Story that creates immediate empathy
+- Statement that triggers anger/outrage
+- Revelation that creates excitement
+- Question that makes viewer think "That's me!"
 
-                        Sort results by engagement_score (highest first), prioritizing segments with the strongest opening hooks.
-                        """
+🎯 CONTROVERSY HOOKS:
+- Unpopular opinion that's actually popular
+- "Everyone says X, but..." + counter-argument
+- "The industry doesn't want you to know..." + secret
+- "Why I stopped..." + surprising decision
+- "What I learned the hard way..." + painful truth
+
+SEGMENT SELECTION CRITERIA:
+1. HOOK STRENGTH (40% of score):
+   - Does it grab attention in first 3 seconds?
+   - Is it immediately relatable or shocking?
+   - Does it create a curiosity gap?
+2. CONTENT QUALITY (30% of score):
+   - Is the payoff worth the setup?
+   - Does it deliver on the hook's promise?
+   - Is it self-contained (no context needed)?
+3. VIRAL POTENTIAL (20% of score):
+   - Would people want to share this?
+   - Does it create strong emotions?
+   - Is it timely or evergreen?
+4. AUDIENCE FIT (10% of score):
+   - Does it speak to a specific audience?
+   - Is it authentic and genuine?
+   - Does it provide real value?
+
+ENGAGEMENT MULTIPLIERS (Add to viral_score):
++3.0: Controversial takes that are actually popular
++2.5: Personal stories with universal emotional appeal
++2.0: Educational content with "mind-blown" moments
++2.0: Behind-the-scenes revelations
++1.5: Comedy with quick, relatable punchlines
++1.5: "How I..." success/failure stories
++1.0: Relatable daily struggles or wins
++1.0: Industry secrets or insider knowledge
++0.5: Trending topics or current events
+
+CLIP STRUCTURE REQUIREMENTS:
+- Each clip must be 20-45 seconds (never over 60s)
+- Must have a strong opening hook (first 3-5 seconds)
+- Must have a satisfying payoff or conclusion
+- Should end with a cliffhanger or call-to-action when possible
+- Must be self-contained (no context from earlier needed)
+- If two viral moments are close, make two separate clips
+
+TIME PADDING RULES:
+- Add 2-3 seconds BEFORE the identified start time for natural flow
+- Add 2-4 seconds AFTER the identified end time for smooth conclusion
+- Never let clips cut off mid-sentence
+- Ensure smooth audio transitions
+- Account for natural speech pauses
+
+AVOID THESE SEGMENTS:
+❌ Slow introductions or explanations
+❌ Technical content without clear benefits
+❌ Segments requiring context from earlier in video
+❌ Long setups without quick payoffs
+❌ Generic advice without personal stories
+❌ Overly promotional or salesy content
+❌ Content that's too niche or specific
+
+Return ONLY a JSON array in this exact format:
+[
+    {{
+        "title": "A unique, content-based title for this segment (not generic)",
+        "description": "Detailed explanation of why this segment is engaging, referencing the transcript.",
+        "start_time": "MM:SS",
+        "end_time": "MM:SS", 
+        "duration": 30,
+        "engagement_score": 8.5,
+        "viral_score": 9.2,
+        "hook_type": "shock|curiosity|emotional|controversy",
+        "target_audience": "specific audience this appeals to",
+        "emotional_triggers": ["shock", "curiosity", "anger", "excitement", "empathy"],
+        "shareability_factor": "why people would share this"
+    }}
+]
+
+SCORING GUIDELINES:
+- engagement_score: 1-10 (how engaging the content is)
+- viral_score: 1-10 (likelihood to go viral, includes multipliers)
+- Sort by viral_score (highest first)
+- Only include segments with viral_score >= 7.0
+- Maximum 7 clips per video (but prefer more, shorter clips)
+
+Remember: You're not just finding good content - you're finding content that will make people STOP SCROLLING and WATCH THE ENTIRE CLIP. Each title and description must be unique and based on the actual transcript content.
+"""
             
             response = self.content_analyzer_service.client.chat.completions.create(
                 model="gpt-4o",
@@ -145,8 +217,50 @@ class AutoClipperService(BaseService):
             json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
             if json_match:
                 clips_data = json.loads(json_match.group())
-                self.logger.info(f"AI identified {len(clips_data)} potential clips")
-                return clips_data
+                
+                # Apply time padding and validate clips
+                processed_clips = []
+                for clip in clips_data:
+                    # Apply time padding for smoother clips
+                    start_seconds = self.video_processing_service.time_to_seconds(clip['start_time'])
+                    end_seconds = self.video_processing_service.time_to_seconds(clip['end_time'])
+                    
+                    # Add padding: 2-3 seconds before, 2-4 seconds after
+                    padding_before = min(3, start_seconds)  # Don't go below 0
+                    padding_after = min(4, video_duration - end_seconds)  # Don't exceed video duration
+                    
+                    # Apply padding
+                    padded_start = max(0, start_seconds - padding_before)
+                    padded_end = min(video_duration, end_seconds + padding_after)
+                    
+                    # Update clip data with padded times
+                    clip['start_time'] = self.format_timestamp(padded_start)
+                    clip['end_time'] = self.format_timestamp(padded_end)
+                    clip['duration'] = padded_end - padded_start
+                    
+                    # Ensure viral_score exists (fallback to engagement_score if not)
+                    if 'viral_score' not in clip:
+                        clip['viral_score'] = clip.get('engagement_score', 5.0)
+                    
+                    # Ensure other new fields exist with defaults
+                    clip.setdefault('hook_type', 'unknown')
+                    clip.setdefault('target_audience', 'general')
+                    clip.setdefault('emotional_triggers', [])
+                    clip.setdefault('shareability_factor', 'engaging content')
+                    
+                    # Validate clip duration after padding
+                    if (clip['duration'] >= self.settings.min_clip_duration and 
+                        clip['duration'] <= self.settings.max_clip_duration):
+                        processed_clips.append(clip)
+                    else:
+                        self.logger.warning(f"Skipping clip due to invalid duration after padding: {clip['duration']}s")
+                
+                # Sort by viral_score (highest first) and limit to 7 clips
+                processed_clips.sort(key=lambda x: x.get('viral_score', 0), reverse=True)
+                processed_clips = processed_clips[:7]
+                
+                self.logger.info(f"AI identified {len(processed_clips)} valid clips after padding and filtering")
+                return processed_clips
             else:
                 raise ContentAnalysisError("Could not parse AI response for clip analysis")
                 
@@ -199,7 +313,8 @@ class AutoClipperService(BaseService):
         
         for clip_info in clip_infos:
             clip_number = clip_info['clip_number']
-            clip_path = clip_info['file_path']
+            # Always use the absolute path for reading the file
+            clip_path = os.path.join(self.settings.results_dir, clip_info['file_path']) if not os.path.isabs(clip_info['file_path']) else clip_info['file_path']
             clip_filename = clip_info['file_name']
             
             self.logger.info(f"Processing clip {clip_number}:")
@@ -361,17 +476,19 @@ class AutoClipperService(BaseService):
                     self.logger.warning(f"Skipping clip {i+1}: duration {clip_duration}s is out of range")
                     continue
                 
-                # Create clip filename
+                # Create the clip filename
                 safe_title = self.video_processing_service.get_safe_filename(segment['title'])
                 clip_filename = f"clip_{timestamp}_{i+1}_{safe_title}.mp4"
                 clip_path = os.path.join(self.settings.clips_dir, clip_filename)
-                
+
                 # Create the clip
                 self.video_processing_service.create_video_clip(
                     video_path, start_seconds, end_seconds, clip_path, aspect_ratio
                 )
-                
-                # Convert file path to URL if request is provided
+
+                # Compute relative path for frontend (relative to 'results/')
+                rel_path = os.path.relpath(clip_path, self.settings.results_dir)
+                # Compute URL for serving via FastAPI static mount
                 clip_url = file_path_to_url(clip_path, request) if request else clip_path
                 clip_info = {
                     'clip_number': i + 1,
@@ -381,12 +498,17 @@ class AutoClipperService(BaseService):
                     'end_time': segment['end_time'],
                     'duration': clip_duration,
                     'engagement_score': segment.get('engagement_score', 0),
-                    'file_path': clip_path,  # Keep the actual file path
-                    'url': clip_url,  # Store the URL separately
+                    'viral_score': segment.get('viral_score', 0),
+                    'hook_type': segment.get('hook_type', 'unknown'),
+                    'target_audience': segment.get('target_audience', 'general'),
+                    'emotional_triggers': segment.get('emotional_triggers', []),
+                    'shareability_factor': segment.get('shareability_factor', 'engaging content'),
+                    'file_path': rel_path,  # relative path for frontend
+                    'url': clip_url,        # full URL for playback
                     'file_name': clip_filename,
                     'aspect_ratio': aspect_ratio
                 }
-                
+
                 created_clips.append(clip_info)
             
             if not created_clips:
@@ -413,6 +535,35 @@ class AutoClipperService(BaseService):
             # Prepare response
             # Convert original video path to URL if request is provided
             video_url = file_path_to_url(video_path, request) if request else video_path
+
+            # --- Save metadata JSON for this batch ---
+            import json as _json
+            metadata_filename = f"clips_metadata_{timestamp}.json"
+            metadata_path = os.path.join(self.settings.results_dir, metadata_filename)
+            # Ensure each clip has a 'path' field starting with a slash
+            for clip in created_clips:
+                if not clip.get('path'):
+                    rel_path = os.path.relpath(os.path.join(self.settings.results_dir, clip['file_name']), self.settings.results_dir)
+                    clip['path'] = f"/{rel_path}" if not rel_path.startswith("/") else rel_path
+                # Always set 'url' to a full URL using file_path_to_url
+                if 'file_name' in clip:
+                    abs_path = os.path.join(self.settings.clips_dir, clip['file_name'])
+                    if request:
+                        clip['url'] = file_path_to_url(abs_path, request)
+                # Ensure zapcap_result['captioned_video_url'] is a full URL if present
+                if 'zapcap_result' in clip and clip['zapcap_result']:
+                    zc = clip['zapcap_result']
+                    if 'captioned_video_path' in zc and request:
+                        zc['captioned_video_url'] = file_path_to_url(zc['captioned_video_path'], request)
+                    clip['zapcap_result'] = zc
+            with open(metadata_path, "w", encoding="utf-8") as f:
+                _json.dump(created_clips, f, ensure_ascii=False, indent=2)
+            metadata_url = None
+            if request:
+                # Serve via /data/results/...
+                base_url = str(request.base_url).rstrip("/")
+                metadata_url = f"{base_url}/data/results/{metadata_filename}"
+
             result = {
                 'success': True,
                 'message': f'Successfully created {len(created_clips)} clips',
@@ -428,7 +579,8 @@ class AutoClipperService(BaseService):
                     'total_clip_duration': sum(clip['duration'] for clip in created_clips),
                     'zapcap_processed': use_zapcap,
                     'aspect_ratio': aspect_ratio
-                }
+                },
+                'clips_metadata_json': metadata_url or metadata_path
             }
             
             self.logger.info(f"Auto clipping completed: {len(created_clips)} clips created")

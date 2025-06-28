@@ -9,7 +9,6 @@ from app.services.video_processing import VideoProcessingService
 from app.services.zapcap import ZapCapService
 from app.services.content_analyzer import ContentAnalyzerService
 from app.services.auto_clipper import AutoClipperService
-from app.services.social_media_service import SocialMediaService
 from app.services.oauth_service import OAuthService
 from app.services.social_upload_service import SocialUploadService
 
@@ -61,11 +60,6 @@ def get_auto_clipper_service(
 ) -> AutoClipperService:
     """Get auto clipper service instance"""
     return AutoClipperService(settings, openai_client)
-
-
-def get_social_media_service(settings: Settings = Depends(get_settings)) -> SocialMediaService:
-    """Get social media service instance"""
-    return SocialMediaService(settings)
 
 
 def get_oauth_service(settings: Settings = Depends(get_settings)) -> OAuthService:

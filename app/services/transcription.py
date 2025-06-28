@@ -285,6 +285,7 @@ class TranscriptionService(BaseService):
             if len(chunk_info) == 1:
                 # Single file transcription
                 with open(chunk_info[0]['path'], "rb") as audio_file:
+                    # Could use gpt-4o-transcribe for better accuracy
                     transcript = self.client.audio.transcriptions.create(
                         model="whisper-1",
                         file=audio_file,
