@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
-from typing import Optional, Dict, Any, List
+from typing import Callable, Optional, Dict, Any, List
 import logging
 from datetime import datetime
 import asyncio
@@ -14,7 +14,7 @@ from app.core.dependencies import get_auto_clipper_service, get_settings
 from app.models.requests import ClipFromURLRequest, ClipFromFilePathRequest
 from app.models.responses import ClipResponse, ErrorResponse
 from app.models.tasks import TaskResponse
-from app.models.enums import AspectRatio, ZapCapLanguage
+from app.models.enums import AspectRatio, ZapCapLanguage, ObjectDetectionType, SmartCroppingMode
 from app.core.exceptions import VideoProcessingError, TranscriptionError, ContentAnalysisError, ZapCapError
 from app.services.task_manager import task_manager, TaskStatus
 from app.config.settings import Settings
@@ -25,8 +25,8 @@ router = APIRouter()
 async def process_clip_task(
     task_id: str,
     service: AutoClipperService,
-    process_func: callable,
-    request: Request = None,
+    process_func: Callable,
+    request: Request,
     **kwargs
 ) -> None:
     """Background task for processing clips"""
@@ -52,28 +52,35 @@ async def process_clip_task(
             error=str(e)
         )
 
-@router.post("/upload", response_model=TaskResponse)
+@router.post("/upload", response_model=TaskResponse, responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}})
 async def create_clips_from_upload(
     background_tasks: BackgroundTasks,
+    request: Request,
     file: UploadFile = File(..., description="Video file to process"),
     use_zapcap: bool = Form(False),
     zapcap_template_id: Optional[str] = Form(None),
     zapcap_language: str = Form("en"),
     aspect_ratio: str = Form("9:16"),
     max_clips: int = Form(5),
-    service: AutoClipperService = Depends(get_auto_clipper_service),
-    request: Request = None
+    enable_object_detection: bool = Form(True, description="Enable object detection for smart cropping"),
+    object_detection_type: str = Form("face", description="Object detection type: face, none"),
+    smart_cropping_mode: str = Form("auto", description="Smart cropping mode: object_centered, center_crop, auto"),
+    max_detection_frames: int = Form(10, ge=5, le=30, description="Maximum frames to analyze for object detection"),
+    service: AutoClipperService = Depends(get_auto_clipper_service)
 ) -> TaskResponse:
     """
-    Create clips from uploaded video file (async)
+    Create clips from uploaded video file (async) with optional object detection
     
     This endpoint accepts a video file upload and starts an asynchronous task
     to process it into short clips suitable for social media platforms.
-    https://web2-clipper-academy-be.7b0fqh.easypanel.host/data/clips/clip_1749811681_3_The_Power_of_Dollar_Cost_Averaging.mp4
+    Optionally uses face detection to center the talking person in clips.
+    Supports grid layout for multiple faces (video call style).
+    
     Returns a task ID that can be used to check the processing status.
     """
     try:
-        logger.info(f"Starting async processing for uploaded file: {file.filename}")
+        safe_filename = file.filename.encode('utf-8', 'replace').decode('utf-8') if file.filename else ''
+        logger.info(f"Starting async processing for uploaded file: {safe_filename}")
         
         # Validate file
         if not file.filename:
@@ -86,6 +93,8 @@ async def create_clips_from_upload(
         try:
             aspect_ratio_enum = AspectRatio(aspect_ratio)
             zapcap_language_enum = ZapCapLanguage(zapcap_language)
+            object_detection_enum = ObjectDetectionType(object_detection_type)
+            smart_cropping_enum = SmartCroppingMode(smart_cropping_mode)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=f"Invalid parameter: {str(e)}")
         
@@ -99,7 +108,10 @@ async def create_clips_from_upload(
                 "filename": file.filename,
                 "use_zapcap": use_zapcap,
                 "aspect_ratio": aspect_ratio,
-                "max_clips": max_clips
+                "max_clips": max_clips,
+                "enable_object_detection": enable_object_detection,
+                "object_detection_type": object_detection_type,
+                "smart_cropping_mode": smart_cropping_mode,
             }
         )
         
@@ -113,34 +125,56 @@ async def create_clips_from_upload(
             use_zapcap=use_zapcap,
             zapcap_template_id=zapcap_template_id,
             aspect_ratio=aspect_ratio_enum.value,
+            max_clips=max_clips,
+            enable_object_detection=enable_object_detection,
+            object_detection_type=object_detection_enum.value,
+            smart_cropping_mode=smart_cropping_enum.value,
+            max_detection_frames=max_detection_frames,
             request=request
         )
         
         # Return task information
         task = await task_manager.get_task(task_id)
-        return TaskResponse(**task)
+        if not task:
+            raise HTTPException(status_code=500, detail="Task not found after creation.")
+        return TaskResponse(
+            id=task['id'],
+            type=task['type'],
+            status=task['status'],
+            created_at=task['created_at'],
+            updated_at=task['updated_at'],
+            metadata=task.get('metadata', {}),
+            result=task.get('result'),
+            error=task.get('error')
+        )
         
     except Exception as e:
         logger.error(f"Failed to start clip processing: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/url", response_model=TaskResponse)
+@router.post("/url", response_model=TaskResponse, responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}})
 async def create_clips_from_url(
     background_tasks: BackgroundTasks,
+    request: Request,
     url: str = Form(..., description="URL of the video to process"),
     use_zapcap: bool = Form(False),
     zapcap_template_id: Optional[str] = Form(None),
     zapcap_language: str = Form("en"),
     aspect_ratio: str = Form("9:16"),
     max_clips: int = Form(5),
-    service: AutoClipperService = Depends(get_auto_clipper_service),
-    request: Request = None
+    enable_object_detection: bool = Form(True, description="Enable object detection for smart cropping"),
+    object_detection_type: str = Form("face", description="Object detection type: face, none"),
+    smart_cropping_mode: str = Form("auto", description="Smart cropping mode: object_centered, center_crop, auto"),
+    max_detection_frames: int = Form(10, ge=5, le=30, description="Maximum frames to analyze for object detection"),
+    service: AutoClipperService = Depends(get_auto_clipper_service)
 ) -> TaskResponse:
     """
-    Create clips from social media URL (async)
+    Create clips from social media URL (async) with optional object detection
     
     This endpoint starts an asynchronous task to download and process
     a video from a supported social media platform.
+    Optionally uses face detection to center the talking person in clips.
+    Supports grid layout for multiple faces (video call style).
     
     Returns a task ID that can be used to check the processing status.
     """
@@ -171,6 +205,8 @@ async def create_clips_from_url(
         try:
             aspect_ratio_enum = AspectRatio(aspect_ratio)
             zapcap_language_enum = ZapCapLanguage(zapcap_language)
+            object_detection_enum = ObjectDetectionType(object_detection_type)
+            smart_cropping_enum = SmartCroppingMode(smart_cropping_mode)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=f"Invalid parameter: {str(e)}")
         
@@ -181,7 +217,10 @@ async def create_clips_from_url(
                 "url": url,
                 "use_zapcap": use_zapcap,
                 "aspect_ratio": aspect_ratio,
-                "max_clips": max_clips
+                "max_clips": max_clips,
+                "enable_object_detection": enable_object_detection,
+                "object_detection_type": object_detection_type,
+                "smart_cropping_mode": smart_cropping_mode,
             }
         )
         
@@ -195,20 +234,34 @@ async def create_clips_from_url(
             use_zapcap=use_zapcap,
             zapcap_template_id=zapcap_template_id,
             aspect_ratio=aspect_ratio_enum.value,
+            max_clips=max_clips,
+            enable_object_detection=enable_object_detection,
+            object_detection_type=object_detection_enum.value,
+            smart_cropping_mode=smart_cropping_enum.value,
+            max_detection_frames=max_detection_frames,
             request=request
         )
         
         # Return task information
         task = await task_manager.get_task(task_id)
-        return TaskResponse(**task)
+        if not task:
+            raise HTTPException(status_code=500, detail="Task not found after creation.")
+        return TaskResponse(
+            id=task['id'],
+            type=task['type'],
+            status=task['status'],
+            created_at=task['created_at'],
+            updated_at=task['updated_at'],
+            metadata=task.get('metadata', {}),
+            result=task.get('result'),
+            error=task.get('error')
+        )
         
     except Exception as e:
         logger.error(f"Failed to start URL processing: {e}")
-        if hasattr(e, 'errors'):
-            logger.error(f"Validation errors: {e.errors()}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/file", response_model=TaskResponse)
+@router.post("/file", response_model=TaskResponse, responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}})
 async def create_clips_from_file_path(
     background_tasks: BackgroundTasks,
     request: Request,
@@ -216,10 +269,11 @@ async def create_clips_from_file_path(
     service: AutoClipperService = Depends(get_auto_clipper_service)
 ) -> TaskResponse:
     """
-    Create clips from local file path (async)
+    Create clips from local file path (async) with optional object detection
     
     This endpoint starts an asynchronous task to process a video file
     from a local file path.
+    Optionally uses object detection to center the talking person in clips.
     
     Returns a task ID that can be used to check the processing status.
     """
@@ -233,7 +287,10 @@ async def create_clips_from_file_path(
                 "file_path": req.file_path,
                 "use_zapcap": req.use_zapcap,
                 "aspect_ratio": req.aspect_ratio.value,
-                "max_clips": req.max_clips
+                "max_clips": req.max_clips,
+                "enable_object_detection": req.enable_object_detection,
+                "object_detection_type": req.object_detection_type.value,
+                "smart_cropping_mode": req.smart_cropping_mode.value
             }
         )
         
@@ -242,19 +299,33 @@ async def create_clips_from_file_path(
             process_clip_task,
             task_id=task_id,
             service=service,
-            process_func=service.create_clips_from_file_path,
-            file_path=req.file_path,
+            process_func=service.process_video,
+            video_input=req.file_path,
             use_zapcap=req.use_zapcap,
             zapcap_template_id=req.zapcap_template_id,
-            zapcap_language=req.zapcap_language,
-            aspect_ratio=req.aspect_ratio,
+            aspect_ratio=req.aspect_ratio.value,
             max_clips=req.max_clips,
+            enable_object_detection=req.enable_object_detection,
+            object_detection_type=req.object_detection_type.value,
+            smart_cropping_mode=req.smart_cropping_mode.value,
+            max_detection_frames=req.max_detection_frames,
             request=request
         )
         
         # Return task information
         task = await task_manager.get_task(task_id)
-        return TaskResponse(**task)
+        if not task:
+            raise HTTPException(status_code=500, detail="Task not found after creation.")
+        return TaskResponse(
+            id=task['id'],
+            type=task['type'],
+            status=task['status'],
+            created_at=task['created_at'],
+            updated_at=task['updated_at'],
+            metadata=task.get('metadata', {}),
+            result=task.get('result'),
+            error=task.get('error')
+        )
         
     except Exception as e:
         logger.error(f"Failed to start file processing: {e}")

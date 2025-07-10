@@ -6,6 +6,9 @@ from datetime import datetime
 from typing import Dict, List, Union, Optional
 from io import BytesIO
 import logging
+import time
+from pathlib import Path
+import shutil
 
 from fastapi import UploadFile, Request
 from openai import OpenAI
@@ -671,12 +674,13 @@ Only JSON, no other text.
             self.logger.error(f"Error splitting long clips: {e}")
             return clips_data  # Return original clips if splitting fails
 
-    def analyze_clip_segments(self, transcript_data: Dict, video_duration: float) -> List[Dict]:
+    def analyze_clip_segments(self, transcript_data: Dict, video_duration: float, max_clips: int = 5) -> List[Dict]:
         """Use AI to analyze transcript and identify clip-worthy segments
         
         Args:
             transcript_data: Transcription data with timestamps
             video_duration: Total video duration in seconds
+            max_clips: Maximum number of clips to generate
             
         Returns:
             List of clip segment information
@@ -718,16 +722,13 @@ Only JSON, no other text.
                     ],
                     temperature=0.3
                 )
-                
-                # Parse AI response
-                response_text = response.choices[0].message.content.strip()
+                # Fix: check for None before .strip()
+                response_text = (response.choices[0].message.content or "").strip()
                 self.logger.info(f"AI Response received (first 500 chars): {response_text[:500]}...")
-                
             except Exception as e:
                 self.logger.warning(f"First AI analysis attempt failed: {e}")
                 # Try with a simpler prompt
                 simple_prompt = self.get_simple_prompt(detected_language, transcript_text, video_duration)
-                
                 response = self.content_analyzer_service.client.chat.completions.create(
                     model="gpt-4o",
                     messages=[
@@ -736,8 +737,8 @@ Only JSON, no other text.
                     ],
                     temperature=0.1
                 )
-                
-                response_text = response.choices[0].message.content.strip()
+                # Fix: check for None before .strip()
+                response_text = (response.choices[0].message.content or "").strip()
                 self.logger.info(f"Simple AI Response received (first 500 chars): {response_text[:500]}...")
             
             # Try multiple JSON extraction strategies
@@ -823,9 +824,9 @@ Only JSON, no other text.
                     else:
                         self.logger.warning(f"Skipping clip due to invalid duration after padding: {clip['duration']}s")
                 
-                # Sort by viral_score (highest first) and limit to 10 clips (increased from 7)
+                # Sort by viral_score (highest first) and limit to max_clips
                 processed_clips.sort(key=lambda x: x.get('viral_score', 0), reverse=True)
-                processed_clips = processed_clips[:10]
+                processed_clips = processed_clips[:max_clips]
                 
                 self.logger.info(f"AI identified {len(processed_clips)} valid clips after padding, filtering, and splitting")
                 return processed_clips
@@ -884,7 +885,11 @@ Only JSON, no other text.
         for clip_info in clip_infos:
             clip_number = clip_info['clip_number']
             # Always use the absolute path for reading the file
-            clip_path = os.path.join(self.settings.results_dir, clip_info['file_path']) if not os.path.isabs(clip_info['file_path']) else clip_info['file_path']
+            if os.path.isabs(clip_info['file_path']):
+                clip_path = Path(clip_info['file_path']).resolve()
+            else:
+                clip_path = Path(self.settings.results_dir) / clip_info['file_path']
+                clip_path = clip_path.resolve()
             clip_filename = clip_info['file_name']
             
             self.logger.info(f"Processing clip {clip_number}:")
@@ -892,41 +897,13 @@ Only JSON, no other text.
             self.logger.info(f"  - File name: {clip_filename}")
             
             # Read file content for this clip
-            with open(clip_path, 'rb') as f:
+            with open(str(clip_path), 'rb') as f:
                 file_content = f.read()
                 self.logger.info(f"  - File size: {len(file_content)} bytes")
                 self.logger.info(f"  - First 32 bytes: {file_content[:32].hex()}")
                 
-                # Create a mock UploadFile-like object
-                class MockUploadFile:
-                    def __init__(self, filename, content, size):
-                        self.filename = filename
-                        self._content = content
-                        self.size = size
-                        self._position = 0
-                        self.logger = logging.getLogger(__name__)
-                    
-                    async def read(self):
-                        # Return a copy of the content to prevent sharing
-                        content_copy = self._content[:]
-                        self.logger.info(f"MockUploadFile.read() called for {self.filename}")
-                        self.logger.info(f"  - Content size: {len(content_copy)} bytes")
-                        self.logger.info(f"  - First 32 bytes: {content_copy[:32].hex()}")
-                        return content_copy
-                    
-                    async def seek(self, offset):
-                        self._position = offset
-                        self.logger.info(f"MockUploadFile.seek({offset}) called for {self.filename}")
-                    
-                    async def close(self):
-                        self.logger.info(f"MockUploadFile.close() called for {self.filename}")
-                        pass
-                
-                upload_file = MockUploadFile(
-                    filename=clip_filename,
-                    content=file_content,
-                    size=len(file_content)
-                )
+                # Use a real FastAPI UploadFile for ZapCap
+                upload_file = UploadFile(filename=clip_filename, file=BytesIO(file_content))
                 
                 # Store clip data and create task
                 clip_data.append({
@@ -988,24 +965,38 @@ Only JSON, no other text.
                           use_zapcap: bool = False, 
                           zapcap_template_id: Optional[str] = None,
                           aspect_ratio: str = "9:16",
-                          request: Request = None) -> Dict:
-        """Main processing function for auto clipping
+                          max_clips: int = 5,
+                          enable_object_detection: bool = True,
+                          object_detection_type: str = "face",
+                          smart_cropping_mode: str = "auto",
+                          max_detection_frames: int = 10,
+                          face_layout_mode: str = "middle_crop",
+                          grid_background_color: Optional[str] = None,
+                          request: Optional[Request] = None) -> Dict:
+        """Main processing function for auto clipping with optional object detection
         
         Args:
             video_input: Video source (UploadFile, URL, or file path)
             use_zapcap: Whether to use ZapCap for captions
             zapcap_template_id: Custom ZapCap template ID
             aspect_ratio: Target aspect ratio for clips
-            request: FastAPI Request object for URL generation
+            max_clips: Maximum number of clips to create
+            enable_object_detection: Whether to enable object detection for smart cropping
+            object_detection_type: Type of object detection to use
+            smart_cropping_mode: Smart cropping mode
+            max_detection_frames: Maximum frames to analyze for object detection
+            face_layout_mode: Face layout mode for multiple faces (grid, single, auto)
+            grid_background_color: Background color for grid layout
+            request: FastAPI Request object for URL generation (optional)
         
         Returns:
             Complete processing results
         """
         temp_files = []
-        
+        video_path: str = ""
         try:
             # Step 1: Get video file
-            if hasattr(video_input, 'filename') and hasattr(video_input, 'read'):
+            if isinstance(video_input, UploadFile):
                 self.logger.info(f"Processing uploaded file: {video_input.filename}")
                 video_path = await self.video_processing_service.save_upload_file(video_input)
                 temp_files.append(video_path)
@@ -1013,52 +1004,124 @@ Only JSON, no other text.
                 self.logger.info(f"Processing URL: {video_input}")
                 video_path = await self.get_video_from_url(video_input)
                 temp_files.append(video_path)
-            else:
+            elif isinstance(video_input, str):
                 self.logger.info(f"Processing file path: {video_input}")
                 if not os.path.exists(video_input):
                     raise VideoProcessingError("Video file not found")
                 video_path = video_input
-            
+            else:
+                raise VideoProcessingError("Invalid video_input type")
+
             # Step 2: Get video information
             video_info = self.video_processing_service.get_video_info(video_path)
             self.logger.info(f"Video info: {video_info['duration']:.1f}s, {video_info['width']}x{video_info['height']}")
-            
+
             # Step 3: Transcribe video
             transcript_data = await self.transcription_service.transcribe_video(video_path)
-            
+
             # Step 4: Analyze for clip segments
-            clip_segments = self.analyze_clip_segments(transcript_data, video_info['duration'])
-            
+            clip_segments = self.analyze_clip_segments(transcript_data, video_info['duration'], max_clips)
+
+            # Save analyzed transcript for reuse
+            video_id = None
+            if isinstance(video_input, UploadFile):
+                filename = getattr(video_input, 'filename', None)
+                if filename:
+                    video_id = os.path.splitext(os.path.basename(filename))[0]
+                else:
+                    video_id = f"video_{int(datetime.now().timestamp())}"
+            elif isinstance(video_input, str):
+                video_id = os.path.splitext(os.path.basename(video_input))[0]
+            if video_id and isinstance(clip_segments, list):
+                analyzed_save_path = os.path.join(self.settings.results_dir, f"{video_id}_analyzed.json")
+                with open(analyzed_save_path, "w", encoding="utf-8") as f:
+                    json.dump(clip_segments, f, ensure_ascii=False, indent=2)
+                self.logger.info(f"Analyzed transcript saved to: {analyzed_save_path}")
+
             if not clip_segments:
                 raise ContentAnalysisError("No suitable clip segments found")
-            
-            # Step 5: Create clips
+
+            # Step 5: Create clips with object detection or dynamic speaker highlight
             created_clips = []
             timestamp = int(datetime.now().timestamp())
-            
+
             for i, segment in enumerate(clip_segments):
                 start_seconds = self.video_processing_service.time_to_seconds(segment['start_time'])
                 end_seconds = self.video_processing_service.time_to_seconds(segment['end_time'])
-                
+
                 # Validate clip duration
                 clip_duration = end_seconds - start_seconds
                 if clip_duration < self.settings.min_clip_duration or clip_duration > self.settings.max_clip_duration:
                     self.logger.warning(f"Skipping clip {i+1}: duration {clip_duration}s is out of range")
                     continue
-                
+
                 # Create the clip filename
                 safe_title = self.video_processing_service.get_safe_filename(segment['title'])
                 clip_filename = f"clip_{timestamp}_{i+1}_{safe_title}.mp4"
-                clip_path = os.path.join(self.settings.clips_dir, clip_filename)
+                # Always create clips directly in results_dir
+                clip_path = os.path.abspath(os.path.join(self.settings.results_dir, clip_filename))
+                self.logger.info(f"Creating clip at: {clip_path}")
 
-                # Create the clip
-                self.video_processing_service.create_video_clip(
-                    video_path, start_seconds, end_seconds, clip_path, aspect_ratio
-                )
+                # Use middle crop for most prominent face (was: single/highlight)
+                if enable_object_detection and face_layout_mode == 'middle_crop':
+                    # (Insert logic for centering the most prominent face, previously used for 'single' and 'highlight')
+                    try:
+                        self.video_processing_service.create_video_clip(
+                            video_path, 
+                            start_seconds, 
+                            end_seconds, 
+                            clip_path, 
+                            aspect_ratio,
+                            enable_object_detection=enable_object_detection,
+                            object_detection_type=object_detection_type,
+                            max_detection_frames=max_detection_frames,
+                            face_layout_mode=face_layout_mode,
+                            grid_background_color=grid_background_color if grid_background_color else 'black'
+                        )
+                    except Exception as e:
+                        self.logger.error(f"[DEBUG] FFmpeg error: {e}")
+                elif enable_object_detection and face_layout_mode == 'grid':
+                    # (Grid layout logic remains unchanged, but pass grid_background_color)
+                    try:
+                        self.video_processing_service.create_video_clip(
+                            video_path, 
+                            start_seconds, 
+                            end_seconds, 
+                            clip_path, 
+                            aspect_ratio,
+                            enable_object_detection=enable_object_detection,
+                            object_detection_type=object_detection_type,
+                            max_detection_frames=max_detection_frames,
+                            face_layout_mode=face_layout_mode,
+                            grid_background_color=grid_background_color if grid_background_color else 'black'
+                        )
+                    except Exception as e:
+                        self.logger.error(f"[DEBUG] FFmpeg error: {e}")
+                else:
+                    # Fallback: standard clip creation
+                    try:
+                        self.video_processing_service.create_video_clip(
+                            video_path, 
+                            start_seconds, 
+                            end_seconds, 
+                            clip_path, 
+                            aspect_ratio,
+                            enable_object_detection=enable_object_detection,
+                            object_detection_type=object_detection_type,
+                            max_detection_frames=max_detection_frames,
+                            face_layout_mode=face_layout_mode,
+                            grid_background_color=grid_background_color if grid_background_color else 'black'
+                        )
+                    except Exception as e:
+                        self.logger.error(f"[DEBUG] FFmpeg error: {e}")
+                # Log and check if the clip was created
+                clip_path_check = clip_path.replace("/", os.sep)
+                if not os.path.exists(clip_path_check):
+                    self.logger.error(f"Clip file was not created: {clip_path}")
+                else:
+                    self.logger.info(f"Clip successfully created: {clip_path}")
 
-                # Compute relative path for frontend (relative to 'results/')
                 rel_path = os.path.relpath(clip_path, self.settings.results_dir)
-                # Compute URL for serving via FastAPI static mount
                 clip_url = file_path_to_url(clip_path, request) if request else clip_path
                 clip_info = {
                     'clip_number': i + 1,
@@ -1073,22 +1136,25 @@ Only JSON, no other text.
                     'target_audience': segment.get('target_audience', 'general'),
                     'emotional_triggers': segment.get('emotional_triggers', []),
                     'shareability_factor': segment.get('shareability_factor', 'engaging content'),
-                    'file_path': rel_path,  # relative path for frontend
-                    'url': clip_url,        # full URL for playback
+                    'file_path': rel_path,
+                    'url': clip_url,
                     'file_name': clip_filename,
-                    'aspect_ratio': aspect_ratio
+                    'aspect_ratio': aspect_ratio,
+                    'object_detection_used': enable_object_detection,
+                    'object_detection_type': object_detection_type,
+                    'smart_cropping_mode': smart_cropping_mode,
+                    'face_layout_mode': face_layout_mode
                 }
-
                 created_clips.append(clip_info)
-            
+
             if not created_clips:
                 raise VideoProcessingError("No valid clips could be created")
-            
+
             # Step 6: Process all clips with ZapCap in parallel if requested
             if use_zapcap:
                 self.logger.info(f"Processing {len(created_clips)} clips with ZapCap in parallel...")
                 zapcap_results = await self.process_clips_with_zapcap_parallel(created_clips, zapcap_template_id)
-                
+
                 # Update clips with ZapCap results
                 for clip in created_clips:
                     clip_number = clip['clip_number']
@@ -1101,13 +1167,12 @@ Only JSON, no other text.
                             if 'captioned_video_path' in zapcap_result and request:
                                 zapcap_result['captioned_video_url'] = file_path_to_url(zapcap_result['captioned_video_path'], request)
                             clip['zapcap_result'] = zapcap_result
-            
+
             # Prepare response
             # Convert original video path to URL if request is provided
             video_url = file_path_to_url(video_path, request) if request else video_path
 
             # --- Save metadata JSON for this batch ---
-            import json as _json
             metadata_filename = f"clips_metadata_{timestamp}.json"
             metadata_path = os.path.join(self.settings.results_dir, metadata_filename)
             # Ensure each clip has a 'path' field starting with a slash
@@ -1117,7 +1182,7 @@ Only JSON, no other text.
                     clip['path'] = f"/{rel_path}" if not rel_path.startswith("/") else rel_path
                 # Always set 'url' to a full URL using file_path_to_url
                 if 'file_name' in clip:
-                    abs_path = os.path.join(self.settings.clips_dir, clip['file_name'])
+                    abs_path = os.path.join(self.settings.results_dir, clip['file_name'])
                     if request:
                         clip['url'] = file_path_to_url(abs_path, request)
                 # Ensure zapcap_result['captioned_video_url'] is a full URL if present
@@ -1127,7 +1192,7 @@ Only JSON, no other text.
                         zc['captioned_video_url'] = file_path_to_url(zc['captioned_video_path'], request)
                     clip['zapcap_result'] = zc
             with open(metadata_path, "w", encoding="utf-8") as f:
-                _json.dump(created_clips, f, ensure_ascii=False, indent=2)
+                json.dump(created_clips, f, ensure_ascii=False, indent=2)
             metadata_url = None
             if request:
                 # Serve via /data/results/...
@@ -1148,14 +1213,17 @@ Only JSON, no other text.
                     'clips_created': len(created_clips),
                     'total_clip_duration': sum(clip['duration'] for clip in created_clips),
                     'zapcap_processed': use_zapcap,
-                    'aspect_ratio': aspect_ratio
+                    'aspect_ratio': aspect_ratio,
+                    'object_detection_used': enable_object_detection,
+                    'object_detection_type': object_detection_type,
+                    'smart_cropping_mode': smart_cropping_mode,
+                    'face_layout_mode': face_layout_mode
                 },
                 'clips_metadata_json': metadata_url or metadata_path
             }
-            
-            self.logger.info(f"Auto clipping completed: {len(created_clips)} clips created")
+
+            self.logger.info(f"Auto clipping completed: {len(created_clips)} clips created with object detection: {enable_object_detection}, face layout: {face_layout_mode}")
             return result
-            
         except Exception as e:
             self.logger.error(f"Error in auto clipping process: {e}")
             raise

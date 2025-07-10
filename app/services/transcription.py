@@ -6,6 +6,7 @@ import concurrent.futures
 from datetime import datetime
 from typing import Dict, List, Optional
 from io import BytesIO
+import time
 
 from openai import OpenAI
 
@@ -396,4 +397,10 @@ class TranscriptionService(BaseService):
                         os.remove(temp_file)
                         self.logger.debug(f"Cleaned up temp file: {temp_file}")
                     except OSError as e:
-                        self.logger.warning(f"Could not clean up temp file {temp_file}: {e}") 
+                        self.logger.warning(f"Could not clean up temp file {temp_file}: {e}")
+                        # On Windows, files might be locked briefly, try again after a short delay
+                        time.sleep(0.1)
+                        try:
+                            os.remove(temp_file)
+                        except OSError:
+                            self.logger.warning(f"Failed to remove temp file {temp_file}, will be cleaned up later") 

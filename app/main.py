@@ -5,6 +5,10 @@ import logging
 import time
 from datetime import datetime
 from fastapi.staticfiles import StaticFiles
+import os
+from fastapi.exceptions import RequestValidationError
+from fastapi.exceptions import HTTPException
+from fastapi.encoders import jsonable_encoder
 
 from app.config.settings import Settings
 from app.config.logging import setup_logging
@@ -22,9 +26,9 @@ settings = Settings()
 
 # Create FastAPI app
 app = FastAPI(
-    title=settings.app_name,
+    title=settings.app_name or "Auto Clipper API",
     description="AI-powered video clipping service with transcription, analysis, and automated caption generation",
-    version=settings.app_version,
+    version=settings.app_version or "1.0.0",
     docs_url="/docs" if settings.debug else None,
     redoc_url="/redoc" if settings.debug else None,
     openapi_url="/openapi.json" if settings.debug else None
@@ -105,13 +109,41 @@ async def clipper_exception_handler(request: Request, exc: ClipperException):
     logger.error(f"ClipperException: {exc}")
     return JSONResponse(
         status_code=500,
-        content=ErrorResponse(
-            error=str(exc),
+        content=jsonable_encoder(ErrorResponse(
+            success=False,
+            error=exc.__class__.__name__,
             message=str(exc),
-            error_type=exc.__class__.__name__,
-            detail="Service error occurred",
-            timestamp=datetime.now()
-        ).dict()
+            details="Service error occurred",
+            timestamp=datetime.utcnow()
+        ))
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=jsonable_encoder(ErrorResponse(
+            success=False,
+            error=exc.__class__.__name__,
+            message=exc.detail if hasattr(exc, 'detail') else str(exc),
+            details=None,
+            timestamp=datetime.utcnow()
+        ))
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content=jsonable_encoder(ErrorResponse(
+            success=False,
+            error="ValidationError",
+            message="Validation failed",
+            details=str(exc),
+            timestamp=datetime.utcnow()
+        ))
     )
 
 
@@ -121,13 +153,13 @@ async def general_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content=ErrorResponse(
-            error="Internal server error",
+        content=jsonable_encoder(ErrorResponse(
+            success=False,
+            error="InternalServerError",
             message="An unexpected error occurred",
-            error_type="InternalServerError", 
-            detail="An unexpected error occurred",
-            timestamp=datetime.now()
-        ).dict()
+            details="An unexpected error occurred",
+            timestamp=datetime.utcnow()
+        ))
     )
 
 
@@ -141,7 +173,6 @@ async def startup_event():
     logger.info(f"ZapCap API key configured: {bool(settings.zapcap_api_key)}")
     
     # Create data directories if they don't exist
-    import os
     directories = [
         settings.upload_dir,
         settings.clips_dir,
@@ -164,7 +195,6 @@ async def shutdown_event():
     logger.info(f"Shutting down {settings.app_name}")
     
     # Cleanup temporary files if needed
-    import os
     import shutil
     temp_dir = settings.temp_dir
     
@@ -190,6 +220,19 @@ async def shutdown_event():
 
 if __name__ == "__main__":
     import uvicorn
+    print('DEBUG: .env file location:', os.path.abspath('.env'))
+    for var in [
+        "APP_URL", "FRONTEND_URL", "OPENAI_API_KEY", "ZAPCAP_API_KEY", "ZAPCAP_TEMPLATE_ID",
+        "ENABLE_OBJECT_DETECTION", "OBJECT_DETECTION_TYPE", "MAX_DETECTION_FRAMES",
+        "MIN_DETECTION_CONFIDENCE", "SMART_CROPPING_ENABLED", "FACE_LAYOUT_MODE",
+        "FACE_EXPANSION_FACTOR", "YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET",
+        "YOUTUBE_REDIRECT_URI", "INSTAGRAM_CLIENT_ID", "INSTAGRAM_CLIENT_SECRET",
+        "INSTAGRAM_REDIRECT_URI", "TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET",
+        "TIKTOK_REDIRECT_URI", "TIKTOK_API_KEY", "TIKTOK_API_SECRET",
+        "TIKTOK_ACCESS_TOKEN", "INSTAGRAM_API_KEY", "INSTAGRAM_API_SECRET",
+        "INSTAGRAM_ACCESS_TOKEN", "YOUTUBE_API_KEY", "YOUTUBE_REFRESH_TOKEN", "HF_TOKEN"
+    ]:
+        print(f"{var} = {os.getenv(var)}")
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",

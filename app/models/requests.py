@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, HttpUrl, field_validator, ConfigDict
 from typing import Optional, List, Dict, Any
-from app.models.enums import AspectRatio, ZapCapLanguage, ClipQuality, ContentCategory
+from app.models.enums import AspectRatio, ZapCapLanguage, ClipQuality, ContentCategory, ObjectDetectionType, SmartCroppingMode
 from datetime import datetime
 
 
@@ -11,7 +11,13 @@ class ClipFromUploadRequest(BaseModel):
     zapcap_language: ZapCapLanguage = Field(ZapCapLanguage.ENGLISH, description="Language for captions")
     aspect_ratio: AspectRatio = Field(AspectRatio.NINE_SIXTEEN, description="Target aspect ratio for clips")
     quality: ClipQuality = Field(ClipQuality.HIGH, description="Video quality setting")
-    max_clips: int = Field(5, ge=1, le=10, description="Maximum number of clips to generate")
+    max_clips: int = Field(5, ge=1, le=20, description="Maximum number of clips to generate")
+    
+    # Object detection and smart cropping options
+    enable_object_detection: bool = Field(True, description="Enable object detection for smart cropping")
+    object_detection_type: ObjectDetectionType = Field(ObjectDetectionType.FACE, description="Type of object detection to use")
+    smart_cropping_mode: SmartCroppingMode = Field(SmartCroppingMode.AUTO, description="Smart cropping mode")
+    max_detection_frames: int = Field(10, ge=5, le=30, description="Maximum frames to analyze for object detection")
     
     class Config:
         json_schema_extra = {
@@ -21,7 +27,11 @@ class ClipFromUploadRequest(BaseModel):
                 "zapcap_language": "en",
                 "aspect_ratio": "9:16",
                 "quality": "high",
-                "max_clips": 5
+                "max_clips": 5,
+                "enable_object_detection": True,
+                "object_detection_type": "face",
+                "smart_cropping_mode": "auto",
+                "max_detection_frames": 10
             }
         }
 
@@ -36,7 +46,11 @@ class ClipFromURLRequest(BaseModel):
                 "zapcap_template_id": "d2018215-2125-41c1-940e-f13b411fff5c",
                 "aspect_ratio": "9:16",
                 "max_clips": 5,
-                "zapcap_language": "en"
+                "zapcap_language": "en",
+                "enable_object_detection": True,
+                "object_detection_type": "face",
+                "smart_cropping_mode": "auto",
+                "max_detection_frames": 10
             }
         }
     )
@@ -45,8 +59,14 @@ class ClipFromURLRequest(BaseModel):
     use_zapcap: bool = Field(False, description="Whether to add captions using ZapCap service")
     zapcap_template_id: Optional[str] = Field(None, description="Custom ZapCap template ID")
     aspect_ratio: AspectRatio = Field(AspectRatio.NINE_SIXTEEN, description="Output aspect ratio")
-    max_clips: int = Field(5, ge=1, le=10, description="Maximum number of clips to generate")
+    max_clips: int = Field(5, ge=1, le=20, description="Maximum number of clips to generate")
     zapcap_language: ZapCapLanguage = Field(ZapCapLanguage.ENGLISH, description="Language for captions")
+    
+    # Object detection and smart cropping options
+    enable_object_detection: bool = Field(True, description="Enable object detection for smart cropping")
+    object_detection_type: ObjectDetectionType = Field(ObjectDetectionType.FACE, description="Type of object detection to use")
+    smart_cropping_mode: SmartCroppingMode = Field(SmartCroppingMode.AUTO, description="Smart cropping mode")
+    max_detection_frames: int = Field(10, ge=5, le=30, description="Maximum frames to analyze for object detection")
     
     @field_validator('url')
     @classmethod
@@ -67,7 +87,13 @@ class ClipFromFilePathRequest(BaseModel):
     zapcap_language: ZapCapLanguage = Field(ZapCapLanguage.ENGLISH, description="Language for captions")
     aspect_ratio: AspectRatio = Field(AspectRatio.NINE_SIXTEEN, description="Target aspect ratio for clips")
     quality: ClipQuality = Field(ClipQuality.HIGH, description="Video quality setting")
-    max_clips: int = Field(5, ge=1, le=10, description="Maximum number of clips to generate")
+    max_clips: int = Field(5, ge=1, le=20, description="Maximum number of clips to generate")
+    
+    # Object detection and smart cropping options
+    enable_object_detection: bool = Field(True, description="Enable object detection for smart cropping")
+    object_detection_type: ObjectDetectionType = Field(ObjectDetectionType.FACE, description="Type of object detection to use")
+    smart_cropping_mode: SmartCroppingMode = Field(SmartCroppingMode.AUTO, description="Smart cropping mode")
+    max_detection_frames: int = Field(10, ge=5, le=30, description="Maximum frames to analyze for object detection")
     
     @field_validator('file_path')
     @classmethod
@@ -91,7 +117,11 @@ class ClipFromFilePathRequest(BaseModel):
                 "zapcap_language": "en",
                 "aspect_ratio": "9:16",
                 "quality": "high",
-                "max_clips": 5
+                "max_clips": 5,
+                "enable_object_detection": True,
+                "object_detection_type": "face",
+                "smart_cropping_mode": "auto",
+                "max_detection_frames": 10
             }
         }
 
@@ -148,7 +178,7 @@ class ZapCapProcessRequest(BaseModel):
 
 class BatchProcessRequest(BaseModel):
     """Request model for batch processing multiple videos"""
-    urls: List[HttpUrl] = Field(..., min_items=1, max_items=10, description="List of video URLs")
+    urls: List[HttpUrl] = Field(..., description="List of video URLs")
     use_zapcap: bool = Field(False, description="Whether to add captions using ZapCap")
     zapcap_template_id: Optional[str] = Field(None, description="Custom ZapCap template ID")
     zapcap_language: ZapCapLanguage = Field(ZapCapLanguage.ENGLISH, description="Language for captions")

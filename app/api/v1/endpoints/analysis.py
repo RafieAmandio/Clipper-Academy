@@ -33,12 +33,13 @@ from app.core.exceptions import (
     ZapCapError,
     VideoProcessingError
 )
+from app.services.video_processing import VideoProcessingService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["analysis"])
 
 
-@router.post("/content", response_model=AnalysisResponse)
+@router.post("/content", response_model=AnalysisResponse, responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}})
 async def analyze_content(
     request: AnalyzeContentRequest,
     content_service: ContentAnalyzerService = Depends(get_content_analyzer_service)
@@ -86,7 +87,7 @@ async def analyze_content(
         )
 
 
-@router.post("/transcribe", response_model=TranscriptionResponse)
+@router.post("/transcribe", response_model=TranscriptionResponse, responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}})
 async def transcribe_audio(
     request: TranscribeRequest,
     transcription_service: TranscriptionService = Depends(get_transcription_service)
@@ -138,7 +139,7 @@ async def transcribe_audio(
         )
 
 
-@router.post("/upload-transcribe", response_model=TranscriptionResponse)
+@router.post("/upload-transcribe", response_model=TranscriptionResponse, responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}})
 async def transcribe_uploaded_file(
     file: UploadFile = File(..., description="Audio or video file to transcribe"),
     return_timestamps: bool = True,
@@ -207,7 +208,7 @@ async def transcribe_uploaded_file(
                 logger.warning(f"Failed to cleanup temp file {temp_file_path}: {cleanup_error}")
 
 
-@router.post("/zapcap", response_model=ZapCapResponse)
+@router.post("/zapcap", response_model=ZapCapResponse, responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}})
 async def process_with_zapcap(
     request: ZapCapProcessRequest,
     file: UploadFile = File(..., description="Video file to add captions to"),

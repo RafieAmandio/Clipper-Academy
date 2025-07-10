@@ -75,6 +75,19 @@ class ContentCategory(str, Enum):
     UNCATEGORIZED = "uncategorized"
 
 
+class ObjectDetectionType(str, Enum):
+    """Object detection types for smart cropping"""
+    FACE = "face"           # Face detection using Haar Cascade
+    NONE = "none"           # No object detection (center crop)
+
+
+class SmartCroppingMode(str, Enum):
+    """Smart cropping modes"""
+    OBJECT_CENTERED = "object_centered"    # Center on detected objects
+    CENTER_CROP = "center_crop"           # Traditional center crop
+    AUTO = "auto"                         # Auto-select based on detection results
+
+
 # Constants
 MIN_CLIP_DURATION = 10  # seconds
 MAX_CLIP_DURATION = 120  # seconds

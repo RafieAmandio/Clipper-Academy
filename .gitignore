@@ -10,6 +10,7 @@ __pycache__/
 .Python
 env/
 venv/
+.venv  # UV virtual environment
 build/
 develop-eggs/
 dist/
@@ -84,6 +85,10 @@ Pipfile.lock
 
 # poetry
 poetry.lock
+
+# UV
+uv.lock  # UV lock file (optional - can be committed for reproducible builds)
+.uv/     # UV cache and data directory
 
 # mypy
 .mypy_cache/

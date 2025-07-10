@@ -1,4 +1,3 @@
-import os
 from typing import Optional
 from pydantic_settings import BaseSettings
 from pydantic import Field
@@ -11,6 +10,7 @@ class Settings(BaseSettings):
     app_name: str = "Auto Clipper API"
     app_version: str = "1.0.0"
     debug: bool = False
+    TEST_MODE: bool = Field(True, description="Enable test-only endpoints and features (never enable in production)")
     host: str = "0.0.0.0"
     port: int = 8000
     app_url: str = Field("http://localhost:8000", description="Base URL of the application for OAuth callbacks")
@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     clips_dir: str = "data/clips"
     temp_dir: str = "data/temp"
     results_dir: str = "data/results"
+    models_dir: str = "data/models"  # Directory for ML models
     
     # Processing Configuration
     max_file_size: int = 500 * 1024 * 1024  # 500MB
@@ -43,6 +44,15 @@ class Settings(BaseSettings):
     supported_video_formats: list[str] = [".mp4", ".mov", ".avi", ".mkv", ".webm"]
     ffmpeg_preset: str = "fast"
     video_quality_crf: int = 23
+    
+    # Object Detection Configuration (Simplified - Haar Cascade only)
+    enable_object_detection: bool = Field(True, description="Enable face detection for smart cropping")
+    object_detection_type: str = Field("face", description="Object detection type: face, none")
+    max_detection_frames: int = Field(10, description="Maximum frames to analyze for face detection")
+    min_detection_confidence: float = Field(0.3, description="Minimum confidence for face detection")
+    smart_cropping_enabled: bool = Field(True, description="Enable smart cropping to center detected faces")
+    face_layout_mode: str = Field("crop", description="Face layout mode: crop (crop around faces), grid (grid layout), single (single face)")
+    face_expansion_factor: float = Field(2.0, description="Factor to expand face bounding box for context")
     
     # Instagram Configuration (for content analyzer)
     instagram_username: Optional[str] = None
@@ -91,6 +101,12 @@ class Settings(BaseSettings):
     
     youtube_api_key: Optional[str] = Field(None, description="YouTube Data API key (legacy)")
     youtube_refresh_token: Optional[str] = Field(None, description="YouTube OAuth refresh token (legacy)")
+    
+    # HuggingFace Token
+    hf_token: Optional[str] = Field(None, description="HuggingFace API token for pyannote.audio and other integrations")
+    
+    # YOLOv8 Face Detection Weights (optional)
+    YOLOV8_FACE_WEIGHTS: Optional[str] = Field(None, description="Path to custom YOLOv8 face detection weights (pt file)")
     
     class Config:
         env_file = ".env"

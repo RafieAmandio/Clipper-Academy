@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import clips, health, analysis, tasks, oauth
+from app.config.settings import Settings
 
 api_router = APIRouter()
 
@@ -44,4 +45,14 @@ api_router.include_router(
     }
 )
 
-api_router.include_router(oauth.router, prefix="/oauth", tags=["oauth"]) 
+api_router.include_router(oauth.router, prefix="/oauth", tags=["oauth"])
+
+settings = Settings()
+
+# Register test-only endpoints if TEST_MODE is enabled
+if getattr(settings, "TEST_MODE", False):
+    try:
+        from app.api.v1.endpoints import test_tools
+        api_router.include_router(test_tools.router, prefix="/test")
+    except ImportError:
+        pass  # test_tools not present in production 
